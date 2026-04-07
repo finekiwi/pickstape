@@ -52,13 +52,17 @@ def load_and_preprocess(
        so that multi-genre tracks are not silently truncated during dedup.
     4. Deduplicate by track_id, keeping the row with the highest
        track_popularity. Tie-breaking order: playlist_genre, playlist_subgenre,
-       playlist_name (alphabetical) for reproducibility.
+       playlist_name (alphabetical) for reproducibility. playlist_name is
+       dropped in step 6 and does not appear in the returned DataFrame.
     5. Merge aggregated genre lists back onto the deduplicated frame.
     6. Drop low-value columns.
-    7. Add tempo_norm — min-max normalised tempo — for the cosine feature
-       matrix. Raw tempo (BPM) is preserved for situation-based hard filters.
-       Raw loudness (dB) is also preserved for the same reason.
-    8. Build the (N, 8) cosine feature matrix from COSINE_FEATURES.
+    7. Add tempo_norm — tempo divided by a fixed 240 BPM ceiling — for the
+       cosine feature matrix. Using a fixed divisor keeps the transform
+       data-independent and safe for subset fixtures. Raw tempo (BPM) is
+       preserved for situation-based hard filters. Raw loudness (dB) is also
+       preserved for the same reason.
+    8. Reset index for alignment with feature_matrix.
+    9. Build the (N, 8) cosine feature matrix from COSINE_FEATURES.
 
     Parameters
     ----------
@@ -76,12 +80,13 @@ def load_and_preprocess(
         Shape (N, 8) float64 array aligned with df. Each row corresponds to
         the same row in df. Columns follow COSINE_FEATURES order.
     """
+    # --- 1. Load CSV ---
     df = pd.read_csv(data_path, encoding="utf-8-sig")
 
-    # --- 1. Drop rows with missing core text fields ---
+    # --- 2. Drop rows with missing core text fields ---
     df = df.dropna(subset=["track_name", "track_artist", "track_album_name"])
 
-    # --- 2. Aggregate genres/subgenres before dedup ---
+    # --- 3. Aggregate genres/subgenres before dedup ---
     # 1,686 tracks appear in multiple playlist_genre categories. Collapsing to
     # a single row would silently drop genre information for those tracks.
     genre_agg = (
@@ -93,7 +98,9 @@ def load_and_preprocess(
         .reset_index()
     )
 
-    # --- 3. Deduplicate by track_id (keep max popularity row) ---
+    # --- 4. Deduplicate by track_id (keep max popularity row) ---
+    # playlist_name is used here only as a stable tiebreaker; it is dropped in
+    # step 6 via _DROP_COLS so it does not appear in the returned DataFrame.
     df = df.sort_values(
         [
             "track_id",
@@ -105,24 +112,26 @@ def load_and_preprocess(
         ascending=[True, False, True, True, True],
     ).drop_duplicates(subset="track_id", keep="first")
 
-    # --- 4. Merge aggregated genre lists ---
+    # --- 5. Merge aggregated genre lists ---
     df = df.merge(genre_agg, on="track_id", how="left")
 
     # Remove original single-value genre columns (replaced by list columns)
     df = df.drop(columns=["playlist_genre", "playlist_subgenre"])
 
-    # --- 5. Drop low-value columns ---
+    # --- 6. Drop low-value columns ---
     df = df.drop(columns=[c for c in _DROP_COLS if c in df.columns])
 
-    # --- 6. Add tempo_norm ---
-    tempo_min = df["tempo"].min()
-    tempo_max = df["tempo"].max()
-    df["tempo_norm"] = (df["tempo"] - tempo_min) / (tempo_max - tempo_min)
+    # --- 7. Add tempo_norm ---
+    # Fixed denominator (240 BPM) makes the transform data-independent and
+    # safe for subset fixtures and future test data that may not span the full
+    # BPM range observed in the training dataset.
+    _TEMPO_MAX = 240.0
+    df["tempo_norm"] = df["tempo"] / _TEMPO_MAX
 
-    # --- 7. Reset index for alignment with feature_matrix ---
+    # --- 8. Reset index for alignment with feature_matrix ---
     df = df.reset_index(drop=True)
 
-    # --- 8. Build cosine feature matrix ---
+    # --- 9. Build cosine feature matrix ---
     feature_matrix = df[COSINE_FEATURES].to_numpy(dtype=np.float64)
 
     return df, feature_matrix
