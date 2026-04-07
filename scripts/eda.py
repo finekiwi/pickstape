@@ -252,9 +252,15 @@ def _genre_bias(matched: pd.DataFrame, label: str) -> str:
     return "; ".join(biased) if biased else "none"
 
 
+TOP_LABELS = {"Normal/Unclassified", "Bipolar (Mania)", "Anxiety"}
+
+
 def section_mapping_validation(df: pd.DataFrame) -> None:
     section("5. Mapping Validation")
     total = len(df)
+
+    # Pre-compute label-filtered subset for post-filter coverage comparison
+    df_label_filtered = df[df["Mental_Health_Label"].isin(TOP_LABELS)]
 
     print("### MOOD_MAPPING\n")
     mood_rows = []
@@ -270,9 +276,13 @@ def section_mapping_validation(df: pd.DataFrame) -> None:
         top_label = label_dist.idxmax() if not label_dist.empty else "N/A"
         top_label_pct = round(label_dist.max(), 1) if not label_dist.empty else 0
 
+        # Post-filter count: audio filters applied on top-3-label subset
+        n_post = len(_apply_filters(df_label_filtered, conditions))
+
         mood_rows.append({
             "mood": mood,
             "matched": n,
+            "post_label_filter": n_post,
             "coverage_%": pct,
             "status": flag,
             "top_label": f"{top_label} ({top_label_pct}%)",
@@ -280,6 +290,13 @@ def section_mapping_validation(df: pd.DataFrame) -> None:
         })
     mood_df = pd.DataFrame(mood_rows)
     print(md_table(mood_df))
+
+    print(
+        "\n> `post_label_filter`: matches remaining after restricting to "
+        "`Mental_Health_Label ∈ {Normal/Unclassified, Bipolar (Mania), Anxiety}` "
+        "**before** audio-feature filtering. Use this column to evaluate whether "
+        "a hard label gate is safe for each mood."
+    )
 
     # Warn with adjustment suggestions for <300
     print()
@@ -301,15 +318,27 @@ def section_mapping_validation(df: pd.DataFrame) -> None:
         pct = round(n / total * 100, 2)
         flag = "⚠️ <300" if n < 300 else "✅"
         bias = _genre_bias(matched, situation)
+
+        # Post-filter count with top-3 label restriction
+        n_post = len(_apply_filters(df_label_filtered, conditions))
+
         sit_rows.append({
             "situation": situation,
             "matched": n,
+            "post_label_filter": n_post,
             "coverage_%": pct,
             "status": flag,
             "genre_bias": bias,
         })
     sit_df = pd.DataFrame(sit_rows)
     print(md_table(sit_df))
+
+    print(
+        "\n> `post_label_filter`: matches remaining after restricting to "
+        "`Mental_Health_Label ∈ {Normal/Unclassified, Bipolar (Mania), Anxiety}` "
+        "**before** audio-feature filtering. Situations with post-filter count < 300 "
+        "must not use Mental_Health_Label as a hard gate."
+    )
 
     print()
     for row in sit_rows:

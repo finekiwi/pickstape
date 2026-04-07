@@ -114,7 +114,9 @@
 | Depression | 138 | 0.4% |
 | 기타 (Autism, Schizophrenia 등) | 307 | 0.9% |
 
-상위 3개 라벨(Normal, Mania, Anxiety)이 전체의 97.7%. 나머지는 샘플 수 부족으로 검색 신호로 쓰기 어려움 → **Normal/Mania/Anxiety만 필터링에 활용**.
+상위 3개 라벨(Normal, Mania, Anxiety)이 전체의 97.7%. 나머지는 샘플 수 부족으로 검색 신호로 쓰기 어려움.
+
+**사용 방침**: Normal/Mania/Anxiety 3개 라벨은 **하드 게이트가 아니라 소프트 랭킹 신호 또는 fallback 필터로만 활용**. 이유: 이 3개 라벨로 선필터 후 오디오 조건을 적용하면 저커버리지 mood/situation의 후보 풀이 급감함 (예: `코딩` 381 → 284, `수면` 234 → 109 — 섹션 5 참고). 라벨 필터를 먼저 거는 하드 게이트 방식은 검증되지 않았으며, 특히 `수면`·`코딩` 경로에서 결과 없음(no-result) 위험이 있음.
 
 ### Mental_Health_Label × Genre 교차 분포 (주요 라벨)
 
@@ -142,15 +144,17 @@ Unknown이 84%라 추천 피쳐로 활용 불가. **제외 확정**.
 
 ### MOOD_MAPPING
 
-| mood | matched | coverage_% | status | top_label | genre_bias |
-|------|---------|-----------|--------|-----------|------------|
-| happy | 11,212 | 34.2% | ✅ | Normal/Unclassified (54.9%) | none |
-| sad | 928 | 2.8% | ✅ | Normal/Unclassified (46.4%) | none |
-| angry | 5,466 | 16.6% | ✅ | **Anxiety (73.1%)** | **edm (48% vs 18%)** |
-| calm | 932 | 2.8% | ✅ | Normal/Unclassified (96.1%) | r&b (38% vs 16%) |
-| excited | 5,072 | 15.5% | ✅ | **Bipolar Mania (98.9%)** | none |
-| anxious | 4,346 | 13.2% | ✅ | Normal/Unclassified (78.9%) | none |
-| empty | 2,108 | 6.4% | ✅ | Normal/Unclassified (92.4%) | none |
+`post_label_filter`: audio 조건 적용 전, `Mental_Health_Label ∈ {Normal/Unclassified, Bipolar (Mania), Anxiety}` 선필터 후 잔여 행 수. 이 수치가 낮으면 라벨 필터를 하드 게이트로 쓸 수 없음. **`sad`(928→431)와 `empty`(2,108→1,948)는 특히 감소폭이 큼** — `sad`의 경우 top-3 라벨에 해당하지 않는 Depression/Bipolar Depression 성향 음악이 상당 비중을 차지함.
+
+| mood | matched | post_label_filter | coverage_% | status | top_label | genre_bias |
+|------|---------|------------------|-----------|--------|-----------|------------|
+| happy | 11,212 | 11,176 | 34.2% | ✅ | Normal/Unclassified (54.9%) | none |
+| sad | 928 | 431 | 2.8% | ✅ | Normal/Unclassified (46.4%) | none |
+| angry | 5,466 | 5,428 | 16.6% | ✅ | **Anxiety (73.1%)** | **edm (48% vs 18%)** |
+| calm | 932 | 896 | 2.8% | ✅ | Normal/Unclassified (96.1%) | r&b (38% vs 16%) |
+| excited | 5,072 | 5,061 | 15.5% | ✅ | **Bipolar Mania (98.9%)** | none |
+| anxious | 4,346 | 4,291 | 13.2% | ✅ | Normal/Unclassified (78.9%) | none |
+| empty | 2,108 | 1,948 | 6.4% | ✅ | Normal/Unclassified (92.4%) | none |
 
 **해석**:
 - **`excited`**: Bipolar (Mania) 98.9% → valence(0.7~1.0) + energy(0.7~1.0) 범위가 Mania 라벨 음악과 거의 완벽하게 겹침. Mental_Health_Label 신호가 감정 추천에 실제로 유효하다는 근거.
@@ -160,14 +164,16 @@ Unknown이 84%라 추천 피쳐로 활용 불가. **제외 확정**.
 
 ### SITUATION_MAPPING
 
-| situation | matched | coverage_% | status | genre_bias |
-|-----------|---------|-----------|--------|------------|
-| 카페 | 1,219 | 3.7% | ✅ | r&b (38% vs 16%) |
-| 파티 | 4,962 | 15.1% | ✅ | none |
-| 코딩 | 381 | 1.2% | ✅ | none |
-| 운동 | 10,836 | 33.0% | ✅ | edm (39% vs 18%) |
-| 수면 | 234 | 0.7% | ⚠️ | none |
-| 드라이브 | 6,239 | 19.0% | ✅ | none |
+`post_label_filter`: audio 조건 적용 전, `Mental_Health_Label ∈ {Normal/Unclassified, Bipolar (Mania), Anxiety}` 선필터 후 잔여 행 수. **`코딩`(381→284)과 `수면`(234→109)은 라벨 하드 게이트 적용 불가** — 후보 풀이 300 미만으로 급감함. `카페`(1,219→848)도 40% 감소로 주의 필요.
+
+| situation | matched | post_label_filter | coverage_% | status | genre_bias |
+|-----------|---------|------------------|-----------|--------|------------|
+| 카페 | 1,219 | 848 | 3.7% | ✅ | r&b (38% vs 16%) |
+| 파티 | 4,962 | 4,957 | 15.1% | ✅ | none |
+| 코딩 | 381 | 284 | 1.2% | ✅ | none |
+| 운동 | 10,836 | 10,807 | 33.0% | ✅ | edm (39% vs 18%) |
+| 수면 | 234 | 109 | 0.7% | ⚠️ | none |
+| 드라이브 | 6,239 | 6,219 | 19.0% | ✅ | none |
 
 **수면 범위 조정 필요**:
 
@@ -228,8 +234,11 @@ instrumentalness, liveness, valence, tempo (정규화 후)
 
 ### PS-05 추천 엔진 수정 사항
 1. **`수면` loudness 범위 완화**: `(-46, -15)` → `(-46, -10)` (CLAUDE.md 업데이트 필요)
-2. **Mental_Health_Label 필터**: Normal/Mania/Anxiety 3개만 활용. 나머지는 샘플 부족으로 필터링 시 결과 없음 위험.
-3. **`excited` mood**: Bipolar (Mania) 라벨이 거의 완벽한 신호 → 라벨 필터를 1차 조건으로 적극 활용.
+2. **Mental_Health_Label 사용 방침 — 소프트 신호 / fallback만 허용**:
+   - `Normal/Mania/Anxiety` 3개 라벨은 **하드 게이트(선필터)가 아닌** 코사인 유사도 스코어링 단계의 보조 신호 또는 후처리 fallback으로만 활용.
+   - 이유: 라벨 선필터 적용 시 `코딩` 381→284, `수면` 234→109로 급감 — 둘 다 no-result 경로 진입 위험 (섹션 5 post_label_filter 컬럼 참고).
+   - 나머지 라벨(Depression, Bipolar Depression 등)은 샘플 부족으로 어떤 방식으로도 활용 불가.
+3. **`excited` mood**: Bipolar (Mania) 라벨이 거의 완벽한 신호(98.9%) — 소프트 신호로서는 강력히 활용 가능. 단, 하드 게이트가 아닌 스코어링 가중치로 반영.
 4. **`angry` genre 다양성**: 추천 결과가 edm에 쏠릴 수 있음. genre_pref 파라미터로 사용자가 원하는 장르 지정 가능하면 보완됨.
 
 ### 발표 어필 포인트
