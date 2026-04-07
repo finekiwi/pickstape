@@ -21,4 +21,5 @@ venv/
 *.swp
 
 # Refs (참조 문서, 비공개)
-refs/
+refs/*
+!refs/eda_report.md
