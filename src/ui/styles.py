@@ -156,58 +156,77 @@ BASE_CSS: str = """
     background: rgba(255,255,255,0.7);
 }
 
-/* ── White inner panel (single-column, no left/right split) ─ */
+/* ── White inner panel ───────────────────────────────── */
 .vhs-inner-panel {
     background-color: #FFFFFF;
     border-radius: 8px;
     margin: 8px 10px 6px;
     padding: 10px 12px;
+    overflow: hidden;
+}
+
+/* ── card-main: info (left) | actions (right) ─────────── */
+.card-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+.card-info {
+    flex: 1;
+    min-width: 0;
 }
 .card-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--text-primary) !important;
     margin-bottom: 3px;
     line-height: 1.3;
+    word-break: break-word;
 }
 .card-meta {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary) !important;
-    margin-bottom: 6px;
+    margin-bottom: 5px;
 }
 .card-badges {
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 .genre-badge {
     display: inline-block;
     background-color: #FF6B9D;
     color: #FFFFFF !important;
     border-radius: 10px;
-    padding: 2px 8px;
-    font-size: 10px;
-    margin-right: 4px;
+    padding: 2px 7px;
+    font-size: 9px;
+    margin-right: 3px;
+    margin-bottom: 2px;
 }
 
-/* ── Action buttons row ──────────────────────────────── */
-.card-btns {
+/* ── card-actions (right column, compact) ────────────── */
+.card-actions {
     display: flex;
-    gap: 6px;
-    align-items: center;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 84px;
+    align-self: flex-start;
 }
 
 /* Spotify button */
 .spotify-btn {
-    display: inline-block;
-    padding: 4px 12px;
+    display: block;
+    padding: 3px 6px;
     background-color: #FFF0F5;
     color: #FF6B9D !important;
     border: 1px solid #FF6B9D;
-    border-radius: 10px;
-    font-size: 12px;
+    border-radius: 8px;
+    font-size: 9px;
     font-weight: 500;
     text-decoration: none !important;
+    text-align: center;
     white-space: nowrap;
+    line-height: 1.4;
 }
 .spotify-btn:hover {
     background-color: #FFD4E5;
@@ -215,16 +234,18 @@ BASE_CSS: str = """
 
 /* find-similar: secondary/dashed */
 .find-similar-btn {
-    display: inline-block;
-    padding: 4px 12px;
+    display: block;
+    padding: 3px 6px;
     background-color: transparent;
     color: #C44B78 !important;
     border: 1px dashed #DDA0B4;
-    border-radius: 10px;
-    font-size: 11px;
+    border-radius: 8px;
+    font-size: 9px;
     font-family: 'Galmuri11', monospace;
     text-decoration: none !important;
+    text-align: center;
     white-space: nowrap;
+    line-height: 1.4;
 }
 .find-similar-btn:hover {
     background-color: #FFF0F5;

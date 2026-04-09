@@ -146,7 +146,7 @@ def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
         find_similar_html = (
             f'<a class="find-similar-btn" href="{html.escape(href)}">비슷한 곡 찾기</a>'
         )
-    btns_html = f'<div class="card-btns">{spotify_html}{find_similar_html}</div>' if (spotify_html or find_similar_html) else ""
+    find_similar_html = find_similar_html  # already set above
     return (
         f'<div class="vhs-card">'
         f'  <div class="vhs-header">'
@@ -154,10 +154,17 @@ def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
         f'    <div class="vhs-reels">{_REEL_HTML}</div>'
         f'  </div>'
         f'  <div class="vhs-inner-panel">'
-        f'    <div class="card-title">{name}</div>'
-        f'    <div class="card-meta">{artist} &middot; {album}</div>'
-        f'    <div class="card-badges">{badges_html}</div>'
-        f'    {btns_html}'
+        f'    <div class="card-main">'
+        f'      <div class="card-info">'
+        f'        <div class="card-title">{name}</div>'
+        f'        <div class="card-meta">{artist} &middot; {album}</div>'
+        f'        <div class="card-badges">{badges_html}</div>'
+        f'      </div>'
+        f'      <div class="card-actions">'
+        f'        {spotify_html}'
+        f'        {find_similar_html}'
+        f'      </div>'
+        f'    </div>'
         f'  </div>'
         f'  <div class="vbar-row">{bars_html}</div>'
         f'</div>'
