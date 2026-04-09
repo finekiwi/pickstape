@@ -7,6 +7,8 @@ Flow:
 
 from __future__ import annotations
 
+import re
+
 import streamlit as st
 
 # ── Page config (must be the first Streamlit call) ───────────
@@ -16,6 +18,59 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# ── Response post-processing (runs every render, not cached) ─
+#
+# All defensive checks live here so they're immune to @st.cache_resource
+# retaining stale graph/engine instances across Streamlit hot reloads.
+
+# Inputs with no full Korean syllables or Latin letters (e.g. "ㅋㅋㅋ", "ㅠㅠ")
+# carry no routeable intent — short-circuit to FALLBACK_REASK.
+_ROUTEABLE_RE = re.compile(r"[가-힣a-zA-Z]")
+
+# CJK ideographs leaked by Qwen into Korean responses.
+_CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+")
+
+# Track titles that must never appear in the UI regardless of audio features.
+_TITLE_BLOCKLIST: frozenset[str] = frozenset({
+    "suicidal", "suicide", "kill yourself", "kys",
+    "die", "i want to die", "self harm",
+})
+
+_FALLBACK_REASK: str = (
+    "죄송해요, 요청을 정확히 이해하지 못했어요. 😅\n"
+    "어떤 기분이신지, 어떤 상황에서 들을 음악인지, "
+    "또는 좋아하는 곡 이름을 알려주시면 딱 맞는 곡을 골라드릴게요!"
+)
+
+
+def _is_routeable(text: str) -> bool:
+    """Return True if the input contains enough content to route."""
+    return bool(_ROUTEABLE_RE.search(text))
+
+
+def _clean_text(text: str) -> str:
+    """Strip CJK runs and collapse leftover whitespace."""
+    cleaned = _CJK_RE.sub("", text)
+    return re.sub(r"  +", " ", cleaned).strip()
+
+
+def _filter_recommendations(recs: list[dict]) -> list[dict]:
+    """Remove blocked titles and deduplicate by (track_name, track_artist)."""
+    seen: set[tuple[str, str]] = set()
+    result: list[dict] = []
+    for r in recs:
+        name = r.get("track_name", "").lower()
+        artist = r.get("track_artist", "").lower()
+        if name in _TITLE_BLOCKLIST:
+            continue
+        key = (name, artist)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(r)
+    return result
+
 
 # ── Imports (after set_page_config) ─────────────────────────
 from src.agent import build_graph
@@ -72,15 +127,19 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
         {"role": "user", "content": user_input, "recommendations": None}
     )
 
-    # Invoke agent
-    try:
-        with st.spinner("테이프를 고르는 중..."):
-            result = graph.invoke({"user_input": user_input})
-        response_text: str = result.get("response_text", "")
-        recommendations: list[dict] = result.get("recommendations", [])
-    except Exception:
-        response_text = "서버 연결에 실패했어요. 잠시 후 다시 시도해주세요."
+    # Invoke agent (skip graph for non-routeable input)
+    if not _is_routeable(user_input):
+        response_text = _FALLBACK_REASK
         recommendations = []
+    else:
+        try:
+            with st.spinner("테이프를 고르는 중..."):
+                result = graph.invoke({"user_input": user_input})
+            response_text = _clean_text(result.get("response_text", ""))
+            recommendations = _filter_recommendations(result.get("recommendations", []))
+        except Exception:
+            response_text = "서버 연결에 실패했어요. 잠시 후 다시 시도해주세요."
+            recommendations = []
 
     # Display and store assistant message (always, even on error)
     render_chat_message("assistant", response_text, recommendations or None)
