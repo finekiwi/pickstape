@@ -133,13 +133,20 @@ def make_app():
         stack.enter_context(
             patch("src.recommender.load_and_preprocess", return_value=(df, matrix))
         )
-        stack.enter_context(patch("src.recommender.RecommendationEngine"))
+        mock_re = stack.enter_context(patch("src.recommender.RecommendationEngine"))
+        # Default: is_ambiguous_title returns False (non-ambiguous titles)
+        mock_re.return_value.is_ambiguous_title.return_value = False
 
-        def _build(invoke_result: dict | None = None) -> PickstapeHarness:
+        def _build(
+            invoke_result: dict | None = None,
+            ambiguous: bool = False,
+        ) -> PickstapeHarness:
             import streamlit as st
 
-            # Clear process-level cache so init_graph() re-runs with current mock.
+            # Clear process-level cache so init_resources() re-runs with current mock.
             st.cache_resource.clear()
+
+            mock_re.return_value.is_ambiguous_title.return_value = ambiguous
 
             mock_graph = MagicMock()
             mock_graph.invoke.return_value = invoke_result or _invoke_result()
@@ -470,3 +477,66 @@ class TestErrorHandling:
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         assert len(assistant_msgs) == 3  # welcome + error + normal
         assert "골라봤어요" in assistant_msgs[-1]["content"]  # template, not LLM text
+
+
+# ── Tests: similar disambiguation ────────────────────────────
+
+
+class TestDisambiguation:
+    """Ambiguous similar titles (≥3 artists) without artist → re-ask, no cards."""
+
+    def test_ambiguous_title_without_artist_shows_reask(self, make_app):
+        """is_ambiguous_title=True + no seed_artist → disambiguation message, no recs."""
+        h = make_app(
+            _invoke_result(
+                intent="similar",
+                params={"seed_track": "Stay", "seed_artist": None},
+                recommendations=[_sample_track()],
+            ),
+            ambiguous=True,
+        )
+        h.run(user_input="Stay랑 비슷한 곡 추천해줘")
+        h.assert_no_exception()
+
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        last = assistant_msgs[-1]
+        assert "Stay" in last["content"]
+        assert "아티스트" in last["content"]
+        assert last.get("recommendations") is None
+
+    def test_unambiguous_title_without_artist_proceeds_normally(self, make_app):
+        """is_ambiguous_title=False → normal similar flow even without seed_artist."""
+        h = make_app(
+            _invoke_result(
+                intent="similar",
+                params={"seed_track": "Blinding Lights", "seed_artist": None},
+                recommendations=[_sample_track()],
+            ),
+            ambiguous=False,
+        )
+        h.run(user_input="Blinding Lights랑 비슷한 곡 추천해줘")
+        h.assert_no_exception()
+
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        last = assistant_msgs[-1]
+        assert "찾아봤어요" in last["content"]
+        assert last.get("recommendations") is not None
+
+    def test_ambiguous_title_with_artist_proceeds_normally(self, make_app):
+        """seed_artist provided → disambiguation skipped, normal flow."""
+        h = make_app(
+            _invoke_result(
+                intent="similar",
+                params={"seed_track": "Stay", "seed_artist": "Justin Bieber"},
+                recommendations=[_sample_track()],
+            ),
+            ambiguous=True,  # would be ambiguous, but artist given
+        )
+        h.run(user_input="Stay Justin Bieber랑 비슷한 곡 추천해줘")
+        h.assert_no_exception()
+
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        last = assistant_msgs[-1]
+        # Artist provided → disambiguation not triggered
+        assert "아티스트" not in last["content"]
+        assert last.get("recommendations") is not None

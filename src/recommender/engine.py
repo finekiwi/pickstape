@@ -244,6 +244,17 @@ class RecommendationEngine:
         top_indices = np.argsort(scores)[::-1][:top_k]
         return self._format_results(top_indices)
 
+    def is_ambiguous_title(self, track_name: str, threshold: int = 3) -> bool:
+        """Return True when track_name matches ≥ threshold distinct artists (exact, case-insensitive).
+
+        Used by app.py to detect common titles (Stay, Hello, Love, etc.) that need
+        artist disambiguation before recommend_similar can return meaningful results.
+        """
+        if not track_name:
+            return False
+        matches = self.df[self.df["track_name"].str.lower() == track_name.lower()]
+        return int(matches["track_artist"].nunique()) >= threshold
+
     def recommend(self, intent: str, params: dict, top_k: int = 5) -> list[dict]:
         """Dispatch router output to the appropriate recommendation strategy.
 

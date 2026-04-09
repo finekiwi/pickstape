@@ -111,16 +111,20 @@ from src.ui.styles import inject_base_css
 
 # ── Resource initialisation (run once, cached across reruns) ─
 @st.cache_resource(show_spinner="데이터를 불러오는 중...")
-def init_graph():
-    """Load dataset, build recommendation engine, compile LangGraph."""
+def init_resources():
+    """Load dataset, build recommendation engine, compile LangGraph.
+
+    Returns (graph, engine) so app.py can call engine helpers (e.g.
+    is_ambiguous_title) without going through the cached graph.
+    """
     df, feature_matrix = load_and_preprocess()
     engine = RecommendationEngine(df, feature_matrix)
-    return build_graph(engine)
+    return build_graph(engine), engine
 
 
 # Initialise — show error page if data/model setup fails
 try:
-    graph = init_graph()
+    graph, engine = init_resources()
 except Exception as e:
     st.error(
         "데이터 초기화에 실패했어요. "
@@ -167,10 +171,27 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
                 result = graph.invoke({"user_input": user_input})
             intent = result.get("intent", "fallback")
             params = result.get("params") or {}
-            response_text = _build_template_response(intent, params)
-            recommendations = _filter_recommendations(result.get("recommendations", []))[:5]
-            if not recommendations:
-                response_text = _FALLBACK_REASK
+
+            # Disambiguation: similar + no artist + common title (≥3 distinct artists)
+            seed_track_val = params.get("seed_track") or ""
+            seed_artist_val = params.get("seed_artist") or ""
+            if (
+                intent == "similar"
+                and seed_track_val
+                and not seed_artist_val
+                and engine.is_ambiguous_title(seed_track_val)
+            ):
+                response_text = (
+                    f"'{seed_track_val}'이라는 제목의 곡이 여러 아티스트에게 있어요. "
+                    "어떤 아티스트의 곡인지 알려주시면 더 정확하게 찾아드릴게요! "
+                    "(예: 'Stay - Justin Bieber')"
+                )
+                recommendations = []
+            else:
+                response_text = _build_template_response(intent, params)
+                recommendations = _filter_recommendations(result.get("recommendations", []))[:5]
+                if not recommendations:
+                    response_text = _FALLBACK_REASK
         except Exception:
             response_text = "서버 연결에 실패했어요. 잠시 후 다시 시도해주세요."
             recommendations = []
