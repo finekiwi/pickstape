@@ -12,9 +12,19 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+# Matches at least one full Korean syllable (AC00–D7A3) or Latin letter.
+# Inputs that contain only jamo (ㅋ, ㅠ, …), punctuation, or digits do not
+# carry enough semantic content to route — they fall back to FALLBACK_REASK.
+_HAS_CONTENT_RE = re.compile(r"[가-힣a-zA-Z]")
+
+# CJK unified ideographs + extension A + compatibility + hiragana + katakana —
+# stripped from all LLM outputs. Qwen leaks Chinese and occasionally Japanese;
+# post-processing is more reliable than prompting alone.
+_CJK_RE = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+")
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.agent.prompts import FALLBACK_REASK, RESPONSE_SYSTEM_PROMPT, ROUTER_SYSTEM_PROMPT
+from src.agent.prompts import FALLBACK_REASK, RESPONSE_SYSTEM_PROMPT, RESPONSE_TEMPLATES, ROUTER_SYSTEM_PROMPT
 from src.agent.state import AgentState
 from src.recommender.engine import RecommendationEngine
 from src.utils.config import get_llm
@@ -199,6 +209,17 @@ def _parse_intent_fallback(
 # ── Template fallback for response ───────────────────────────
 
 
+def _clean_response(text: str) -> str:
+    """Strip CJK ideograph runs and collapse leftover whitespace.
+
+    Qwen3.5-4B leaks Chinese characters even when prompted in Korean.
+    Post-processing is more reliable than prompt-only enforcement.
+    """
+    cleaned = _CJK_RE.sub("", text)
+    cleaned = re.sub(r"  +", " ", cleaned)
+    return cleaned.strip()
+
+
 def _template_response(recommendations: list[dict[str, Any]]) -> str:
     """Generate a minimal response when the LLM fails."""
     lines = []
@@ -262,6 +283,10 @@ def create_nodes(
         """Classify user intent and extract recommendation parameters."""
         user_input = state["user_input"]
 
+        # Guard: no full syllables or Latin letters → not routable content.
+        if not _HAS_CONTENT_RE.search(user_input):
+            return {"intent": "fallback", "params": {}}
+
         try:
             llm = router_llm_factory()
             messages = [
@@ -319,41 +344,22 @@ def create_nodes(
     # ── response_node ────────────────────────────────────────
 
     def response_node(state: AgentState) -> dict:
-        """Generate a natural Korean-language response from recommendations."""
+        """Return a short template response.
+
+        Free LLM generation was replaced with templates for stability.
+        Qwen3.5-4B produced inconsistent Korean, leaked foreign characters,
+        and used awkward phrasing — templates eliminate that risk entirely.
+        app.py builds a more contextual version using intent + params.
+        """
         recommendations = state.get("recommendations", [])
-        user_input = state.get("user_input", "")
         intent = state.get("intent", "fallback")
 
-        # No recommendations — return canned re-ask
         if not recommendations:
             return {
                 "response_text": FALLBACK_REASK,
                 "error": state.get("error", "No recommendations produced"),
             }
 
-        # Build concise context for LLM
-        rec_text = _format_recommendations_for_llm(recommendations)
-        human_content = (
-            f"사용자 요청: {user_input}\n"
-            f"추천 의도: {intent}\n"
-            f"추천 결과:\n{rec_text}"
-        )
-
-        try:
-            llm = response_llm_factory()
-            messages = [
-                SystemMessage(content=RESPONSE_SYSTEM_PROMPT),
-                HumanMessage(content=human_content),
-            ]
-            response = llm.invoke(messages)
-            text = response.content or ""
-            if text.strip():
-                return {"response_text": text.strip()}
-        except Exception:
-            logger.exception("Response LLM call failed")
-
-        # Template fallback
-        logger.warning("Using template fallback for response")
-        return {"response_text": _template_response(recommendations)}
+        return {"response_text": RESPONSE_TEMPLATES.get(intent, RESPONSE_TEMPLATES["fallback"])}
 
     return router_node, recommendation_node, response_node

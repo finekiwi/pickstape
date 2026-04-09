@@ -12,6 +12,8 @@ feature_matrix is used only for cosine similarity computation.
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
@@ -25,6 +27,43 @@ from src.recommender.preprocess import COSINE_FEATURES
 
 # Features that use raw scale (not [0, 1]) — only affects _widen_ranges clamp logic
 _RAW_SCALE_FEATURES: frozenset[str] = frozenset({"tempo", "loudness"})
+
+# Maximum BPM difference allowed when filtering similar-track results.
+# Applied as a soft filter: only activated when ≥ top_k candidates qualify.
+# 50 BPM: Yellow ~86 BPM → keep 36–136 BPM, filters 158+ BPM results.
+# Wide enough for fast genres: Blinding Lights ~171 BPM → keep 121–221 BPM.
+_TEMPO_DELTA: float = 50.0
+
+# Track names that must never appear in recommendations regardless of audio features.
+# Titles that carry distressing connotations or are inappropriate for the demo context.
+# Public so app.py can import instead of redefining.
+TITLE_BLOCKLIST: frozenset[str] = frozenset({
+    "suicidal",
+    "suicide",
+    "kill yourself",
+    "kys",
+    "die",
+    "i want to die",
+    "self harm",
+})
+
+
+def is_blocked_title(name: str) -> bool:
+    """Return True if a track name contains a blocklisted term.
+
+    Single-word terms use word-boundary (\\b) matching to avoid false positives
+    (e.g. "die" in "DIEZ MINUTOS", "kys" in "Skyscraper").
+    Multi-word phrases use substring match since word boundaries span spaces.
+    """
+    name_lower = name.lower()
+    for term in TITLE_BLOCKLIST:
+        if " " in term:
+            if term in name_lower:
+                return True
+        else:
+            if re.search(r"\b" + re.escape(term) + r"\b", name_lower):
+                return True
+    return False
 
 # Columns included in each result dict
 _RESULT_COLUMNS: list[str] = [
@@ -166,6 +205,7 @@ class RecommendationEngine:
         self,
         seed_track: str | None = None,
         seed_artist: str | None = None,
+        genre_pref: str | None = None,
         top_k: int = 5,
     ) -> list[dict]:
         """Recommend tracks similar to a seed track via cosine similarity.
@@ -177,6 +217,9 @@ class RecommendationEngine:
             seed_artist are None.
         seed_artist:
             Optional artist name for disambiguation.
+        genre_pref:
+            Optional genre filter. Applied as a soft filter — skipped when
+            fewer than top_k candidates match.
         top_k:
             Number of results to return (seed itself excluded).
         """
@@ -200,10 +243,40 @@ class RecommendationEngine:
         )
         scores[same_track_mask.values] = -1.0
 
+        # Tempo consistency filter — catches cases where the seed has a very
+        # different BPM from the top cosine-similar results (e.g. Yellow ~86 BPM
+        # returning 186 BPM results). Only applied when enough candidates qualify.
+        if "tempo" in self.df.columns:
+            seed_tempo = float(seed_row["tempo"])
+            tempo_close = np.abs(self.df["tempo"].values - seed_tempo) <= _TEMPO_DELTA
+            tempo_scores = scores.copy()
+            tempo_scores[~tempo_close] = -1.0
+            if (tempo_scores > -1.0).sum() >= top_k:
+                scores = tempo_scores
+
+        # Genre filter — soft, skipped when fewer than top_k candidates qualify.
+        if genre_pref:
+            genre_match = self.df["playlist_genres"].apply(lambda gs: genre_pref in gs)
+            genre_scores = scores.copy()
+            genre_scores[~genre_match.values] = -1.0
+            if (genre_scores > -1.0).sum() >= top_k:
+                scores = genre_scores
+
         top_indices = np.argsort(scores)[::-1][:top_k]
         return self._format_results(top_indices)
 
-    def recommend(self, intent: str, params: dict) -> list[dict]:
+    def is_ambiguous_title(self, track_name: str, threshold: int = 3) -> bool:
+        """Return True when track_name matches ≥ threshold distinct artists (exact, case-insensitive).
+
+        Used by app.py to detect common titles (Stay, Hello, Love, etc.) that need
+        artist disambiguation before recommend_similar can return meaningful results.
+        """
+        if not track_name:
+            return False
+        matches = self.df[self.df["track_name"].str.lower() == track_name.lower()]
+        return int(matches["track_artist"].nunique()) >= threshold
+
+    def recommend(self, intent: str, params: dict, top_k: int = 5) -> list[dict]:
         """Dispatch router output to the appropriate recommendation strategy.
 
         Parameters
@@ -213,21 +286,29 @@ class RecommendationEngine:
         params:
             Dict with optional keys: mood, situation, genre_pref, seed_track,
             seed_artist. None values are safe.
+        top_k:
+            Number of candidates to return before post-processing. Callers
+            that apply their own blocklist/dedup should pass a higher value
+            (e.g. 8) to ensure enough tracks remain after filtering.
         """
         if intent == "emotion":
             return self.recommend_by_emotion(
                 mood=params.get("mood"),
                 genre_pref=params.get("genre_pref"),
+                top_k=top_k,
             )
         elif intent == "situation":
             return self.recommend_by_situation(
                 situation=params.get("situation"),
                 genre_pref=params.get("genre_pref"),
+                top_k=top_k,
             )
         elif intent == "similar":
             return self.recommend_similar(
                 seed_track=params.get("seed_track"),
                 seed_artist=params.get("seed_artist"),
+                genre_pref=params.get("genre_pref"),
+                top_k=top_k,
             )
         return []
 
@@ -322,9 +403,11 @@ class RecommendationEngine:
 
         Returns only the columns in _RESULT_COLUMNS. Mental_Health_Label is
         intentionally excluded (ADR-004: never expose diagnosis labels to UI).
+        Tracks matching is_blocked_title() are silently dropped.
         """
         available = [c for c in _RESULT_COLUMNS if c in self.df.columns]
-        return self.df.iloc[indices][available].to_dict("records")
+        rows = self.df.iloc[indices][available].to_dict("records")
+        return [r for r in rows if not is_blocked_title(r.get("track_name", ""))]
 
     def _widen_ranges(
         self,

@@ -55,13 +55,24 @@ RESPONSE_SYSTEM_PROMPT: str = """\
 추천 결과를 받아서 사용자에게 한국어로 자연스럽게 소개해줘.
 
 ## 규칙
-- 반드시 한국어로 응답해
+- 반드시 한국어로만 응답해. 중국어·일본어·기타 언어 문자는 절대 사용하지 마
 - 3~5곡을 자연스럽게 소개해. 곡명과 아티스트는 반드시 포함해
 - 추천 이유는 분위기, 에너지, 템포 등 음악적 특징으로 설명해
 - 친근하고 따뜻한 큐레이션 톤으로 ("이런 분위기로 골라봤어요", "지금 기분이라면 이 곡들 어때요?")
-- 절대 금지: 진단명(Bipolar, Anxiety 등), Mental_Health_Label, 내부 점수, 기술 용어
+- 절대 금지: 진단명(Bipolar, Anxiety 등), Mental_Health_Label, 내부 점수, 기술 용어, 한국어 이외 문자
 - 곡이 없으면 "조금 더 구체적으로 알려주시겠어요?"라고 재질문해
 """
+
+# ── Short response templates (used instead of free LLM generation) ───────────
+# app.py uses a more contextual version (with mood/situation/seed_track).
+# These are used by response_node in the cached graph layer.
+
+RESPONSE_TEMPLATES: dict[str, str] = {
+    "emotion":   "지금 기분에 잘 어울리는 곡들을 골라봤어요. 마음에 드는 곡이 있길 바라요!",
+    "situation": "이 상황에 딱 맞는 곡들이에요. 좋은 시간 되세요!",
+    "similar":   "비슷한 느낌의 곡들을 찾아봤어요. 새로운 음악도 마음에 드셨으면 해요!",
+    "fallback":  "추천 곡을 골라봤어요.",
+}
 
 # ── Fallback messages ────────────────────────────────────────
 

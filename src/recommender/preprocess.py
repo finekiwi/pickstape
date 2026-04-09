@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from collections import Counter
+
 import numpy as np
 import pandas as pd
 
@@ -92,7 +94,7 @@ def load_and_preprocess(
     genre_agg = (
         df.groupby("track_id")
         .agg(
-            playlist_genres=("playlist_genre", lambda x: sorted(set(x))),
+            playlist_genres=("playlist_genre", lambda x: [g for g, _ in Counter(x).most_common()]),
             playlist_subgenres=("playlist_subgenre", lambda x: sorted(set(x))),
         )
         .reset_index()
