@@ -306,7 +306,8 @@ class TestResponseNode:
         assert result["response_text"] == FALLBACK_REASK
         assert result.get("error") is not None
 
-    def test_llm_failure_uses_template(self, sample_engine: RecommendationEngine) -> None:
+    def test_llm_never_called_uses_template(self, sample_engine: RecommendationEngine) -> None:
+        """response_node skips LLM entirely — factory is ignored, template always returned."""
         mock_llm = _make_failing_llm()
         _, _, respond = create_nodes(
             sample_engine,
@@ -322,23 +323,21 @@ class TestResponseNode:
             "intent": "emotion",
             "recommendations": recs,
         })
-        assert "Song A" in result["response_text"]
-        assert "Artist A" in result["response_text"]
+        # Template returned regardless of LLM factory outcome
+        assert "골라봤어요" in result["response_text"]
+        mock_llm.invoke.assert_not_called()
 
-    def test_llm_empty_content_uses_template(self, sample_engine: RecommendationEngine) -> None:
-        mock_llm = _make_mock_llm("")
-        _, _, respond = create_nodes(
-            sample_engine,
-            response_llm_factory=lambda: mock_llm,
-        )
+    def test_template_varies_by_intent(self, sample_engine: RecommendationEngine) -> None:
+        """Different intents produce different template strings."""
+        _, _, respond = create_nodes(sample_engine)
 
         recs = [{"track_name": "Song A", "track_artist": "Artist A", "playlist_genres": ["pop"]}]
-        result = respond({
-            "user_input": "우울한 노래",
-            "intent": "emotion",
-            "recommendations": recs,
-        })
-        assert "Song A" in result["response_text"]
+        emotion_result = respond({"user_input": "슬픈 노래", "intent": "emotion", "recommendations": recs})
+        similar_result = respond({"user_input": "비슷한 곡", "intent": "similar", "recommendations": recs})
+
+        assert emotion_result["response_text"] != similar_result["response_text"]
+        assert "골라봤어요" in emotion_result["response_text"]
+        assert "찾아봤어요" in similar_result["response_text"]
 
 
 # ===========================================================================
