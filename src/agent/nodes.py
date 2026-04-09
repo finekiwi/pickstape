@@ -17,10 +17,10 @@ from typing import Any
 # carry enough semantic content to route — they fall back to FALLBACK_REASK.
 _HAS_CONTENT_RE = re.compile(r"[가-힣a-zA-Z]")
 
-# CJK unified ideographs + extension A + compatibility — stripped from all
-# LLM outputs. Prompting alone is insufficient to prevent Qwen from leaking
-# Chinese characters; post-processing is the reliable backstop.
-_CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+")
+# CJK unified ideographs + extension A + compatibility + hiragana + katakana —
+# stripped from all LLM outputs. Qwen leaks Chinese and occasionally Japanese;
+# post-processing is more reliable than prompting alone.
+_CJK_RE = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+")
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -335,7 +335,9 @@ def create_nodes(
             return {"recommendations": []}
 
         try:
-            results = engine.recommend(intent, params)
+            # Request more than needed so app.py's blocklist/dedup filter
+            # still leaves enough tracks (app.py truncates to 5 after filtering).
+            results = engine.recommend(intent, params, top_k=8)
             return {"recommendations": results}
         except Exception as e:
             logger.exception("Recommendation engine error")

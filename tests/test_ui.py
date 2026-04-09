@@ -334,6 +334,49 @@ class TestPostProcessing:
         assert "營造" not in content
         assert "분위기를營造하기" not in content
 
+    def test_hiragana_stripped_from_response_text(self, make_app):
+        """Hiragana/katakana tokens are removed by _clean_text; Korean text preserved."""
+        h = make_app(
+            _invoke_result(
+                response_text="げてげて 좋은 곡이에요.",
+                recommendations=[_sample_track()],
+                intent="emotion",
+            )
+        )
+        h.run(user_input="신나는 노래")
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        content = assistant_msgs[-1]["content"]
+        assert "げ" not in content
+        assert "て" not in content
+        assert "곡이에요" in content
+
+    def test_arabic_triggers_intent_template(self, make_app):
+        """Response with Arabic script must be replaced by the intent template."""
+        h = make_app(
+            _invoke_result(
+                response_text="좋은 곡 مرحبا이에요.",
+                recommendations=[_sample_track()],
+                intent="situation",
+            )
+        )
+        h.run(user_input="카페 음악")
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        content = assistant_msgs[-1]["content"]
+        assert "مرحبا" not in content
+        assert "상황" in content  # situation template
+
+    def test_recommendations_capped_at_five(self, make_app):
+        """Engine returning >5 tracks should be capped at 5 in stored recs."""
+        tracks = [
+            _sample_track(track_name=f"Song {i}", track_artist=f"Artist {i}")
+            for i in range(8)
+        ]
+        h = make_app(_invoke_result(recommendations=tracks))
+        h.run(user_input="노래 추천해줘")
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        recs = assistant_msgs[-1].get("recommendations") or []
+        assert len(recs) == 5
+
 
 # ── Tests: fallback intent (graph returns empty recs) ─────────
 

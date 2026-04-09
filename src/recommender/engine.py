@@ -26,6 +26,12 @@ from src.recommender.preprocess import COSINE_FEATURES
 # Features that use raw scale (not [0, 1]) — only affects _widen_ranges clamp logic
 _RAW_SCALE_FEATURES: frozenset[str] = frozenset({"tempo", "loudness"})
 
+# Maximum BPM difference allowed when filtering similar-track results.
+# Applied as a soft filter: only activated when ≥ top_k candidates qualify.
+# 80 BPM catches large mismatches (e.g. Yellow ~86 BPM vs 186 BPM results)
+# without over-constraining fast genres.
+_TEMPO_DELTA: float = 80.0
+
 # Track names that must never appear in recommendations regardless of audio features.
 # Titles that carry distressing connotations or are inappropriate for the demo context.
 _TITLE_BLOCKLIST: frozenset[str] = frozenset({
@@ -178,6 +184,7 @@ class RecommendationEngine:
         self,
         seed_track: str | None = None,
         seed_artist: str | None = None,
+        genre_pref: str | None = None,
         top_k: int = 5,
     ) -> list[dict]:
         """Recommend tracks similar to a seed track via cosine similarity.
@@ -189,6 +196,9 @@ class RecommendationEngine:
             seed_artist are None.
         seed_artist:
             Optional artist name for disambiguation.
+        genre_pref:
+            Optional genre filter. Applied as a soft filter — skipped when
+            fewer than top_k candidates match.
         top_k:
             Number of results to return (seed itself excluded).
         """
@@ -212,10 +222,29 @@ class RecommendationEngine:
         )
         scores[same_track_mask.values] = -1.0
 
+        # Tempo consistency filter — catches cases where the seed has a very
+        # different BPM from the top cosine-similar results (e.g. Yellow ~86 BPM
+        # returning 186 BPM results). Only applied when enough candidates qualify.
+        if "tempo" in self.df.columns:
+            seed_tempo = float(seed_row["tempo"])
+            tempo_close = np.abs(self.df["tempo"].values - seed_tempo) <= _TEMPO_DELTA
+            tempo_scores = scores.copy()
+            tempo_scores[~tempo_close] = -1.0
+            if (tempo_scores > -1.0).sum() >= top_k:
+                scores = tempo_scores
+
+        # Genre filter — soft, skipped when fewer than top_k candidates qualify.
+        if genre_pref:
+            genre_match = self.df["playlist_genres"].apply(lambda gs: genre_pref in gs)
+            genre_scores = scores.copy()
+            genre_scores[~genre_match.values] = -1.0
+            if (genre_scores > -1.0).sum() >= top_k:
+                scores = genre_scores
+
         top_indices = np.argsort(scores)[::-1][:top_k]
         return self._format_results(top_indices)
 
-    def recommend(self, intent: str, params: dict) -> list[dict]:
+    def recommend(self, intent: str, params: dict, top_k: int = 5) -> list[dict]:
         """Dispatch router output to the appropriate recommendation strategy.
 
         Parameters
@@ -225,21 +254,29 @@ class RecommendationEngine:
         params:
             Dict with optional keys: mood, situation, genre_pref, seed_track,
             seed_artist. None values are safe.
+        top_k:
+            Number of candidates to return before post-processing. Callers
+            that apply their own blocklist/dedup should pass a higher value
+            (e.g. 8) to ensure enough tracks remain after filtering.
         """
         if intent == "emotion":
             return self.recommend_by_emotion(
                 mood=params.get("mood"),
                 genre_pref=params.get("genre_pref"),
+                top_k=top_k,
             )
         elif intent == "situation":
             return self.recommend_by_situation(
                 situation=params.get("situation"),
                 genre_pref=params.get("genre_pref"),
+                top_k=top_k,
             )
         elif intent == "similar":
             return self.recommend_similar(
                 seed_track=params.get("seed_track"),
                 seed_artist=params.get("seed_artist"),
+                genre_pref=params.get("genre_pref"),
+                top_k=top_k,
             )
         return []
 

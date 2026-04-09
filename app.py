@@ -31,7 +31,7 @@ _ROUTEABLE_RE = re.compile(r"[가-힣a-zA-Z]")
 # Matches any whitespace-delimited token that contains at least one CJK
 # ideograph — the entire token is dropped, not just the CJK character.
 # "분위기를營造하기" → whole token removed (vs. leaving "분위기를하기").
-_CJK_WORD_RE = re.compile(r"\S*[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+\S*")
+_CJK_WORD_RE = re.compile(r"\S*[\u3040-\u30ff\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+\S*")
 
 # Track titles that must never appear in the UI regardless of audio features.
 _TITLE_BLOCKLIST: frozenset[str] = frozenset({
@@ -45,6 +45,29 @@ _FALLBACK_REASK: str = (
     "또는 좋아하는 곡 이름을 알려주시면 딱 맞는 곡을 골라드릴게요!"
 )
 
+# Detects scripts beyond Korean + ASCII + Latin-1 supplement.
+# Arabic, Devanagari, Thai, Latin Extended Additional (Vietnamese ổ ọ etc.),
+# and any surviving hiragana/katakana/CJK after _CJK_WORD_RE are all caught.
+# When triggered, response_text is replaced with a clean per-intent template.
+_SUSPICIOUS_SCRIPT_RE = re.compile(
+    r"[\u3040-\u30ff"    # Hiragana + Katakana
+    r"\u4e00-\u9fff"     # CJK Unified Ideographs
+    r"\u3400-\u4dbf"     # CJK Extension A
+    r"\uf900-\ufaff"     # CJK Compatibility
+    r"\u0600-\u06ff"     # Arabic
+    r"\u0900-\u097f"     # Devanagari
+    r"\u0e00-\u0e7f"     # Thai
+    r"\u1e00-\u1eff"     # Latin Extended Additional (Vietnamese etc.)
+    r"]"
+)
+
+_INTENT_TEMPLATES: dict[str, str] = {
+    "emotion": "지금 기분에 잘 어울리는 곡들을 골라봤어요. 마음에 드는 곡이 있길 바라요!",
+    "situation": "이 상황에 딱 맞는 곡들이에요. 좋은 시간 되세요!",
+    "similar": "비슷한 느낌의 곡들을 찾아봤어요. 새로운 음악도 마음에 드셨으면 해요!",
+}
+_DEFAULT_TEMPLATE: str = "추천 곡을 골라봤어요."
+
 
 def _is_routeable(text: str) -> bool:
     """Return True if the input contains enough content to route."""
@@ -55,6 +78,17 @@ def _clean_text(text: str) -> str:
     """Drop tokens containing CJK characters and collapse leftover whitespace."""
     cleaned = _CJK_WORD_RE.sub("", text)
     return re.sub(r" {2,}", " ", cleaned).strip()
+
+
+def _validate_response(text: str, intent: str) -> str:
+    """Return intent template when text is empty or contains suspicious scripts.
+
+    Catches hiragana, katakana, CJK, Arabic, Devanagari, Thai, and Latin
+    Extended Additional characters that slip through _clean_text().
+    """
+    if not text or _SUSPICIOUS_SCRIPT_RE.search(text):
+        return _INTENT_TEMPLATES.get(intent, _DEFAULT_TEMPLATE)
+    return text
 
 
 def _filter_recommendations(recs: list[dict]) -> list[dict]:
@@ -141,8 +175,14 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
         try:
             with st.spinner("테이프를 고르는 중..."):
                 result = graph.invoke({"user_input": user_input})
-            response_text = _clean_text(result.get("response_text", ""))
-            recommendations = _filter_recommendations(result.get("recommendations", []))
+            intent = result.get("intent", "fallback")
+            response_text = _validate_response(
+                _clean_text(result.get("response_text", "")),
+                intent,
+            )
+            # Cap at 5 so blocklist removal doesn't leave fewer cards than expected.
+            # Engine is asked for 8 (nodes.py top_k=8) as a buffer.
+            recommendations = _filter_recommendations(result.get("recommendations", []))[:5]
             if not recommendations:
                 response_text = _FALLBACK_REASK
         except Exception:
