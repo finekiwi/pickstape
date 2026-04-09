@@ -49,7 +49,14 @@ _MOOD_LABELS: dict[str, str] = {
 
 
 def _is_routeable(text: str) -> bool:
-    """Return True if the input contains enough content to route."""
+    """Return True if the input contains enough content to route.
+
+    Returns False for:
+    - Inputs longer than 500 characters (prevents LLM timeout)
+    - Inputs with no Korean syllables or Latin letters (e.g. emoji-only, jamo-only)
+    """
+    if len(text.strip()) > 500:
+        return False
     return bool(_ROUTEABLE_RE.search(text))
 
 
@@ -151,11 +158,46 @@ if "active_feedback_id" not in st.session_state:
 if "_next_msg_id" not in st.session_state:
     st.session_state._next_msg_id = 1
 
+# ── "비슷한 곡 찾기" — query param handler ────────────────────
+# Triggered when user clicks the HTML anchor in the card:
+#   <a href="?fs=1&fn=Track+Name&fa=Artist+Name">비슷한 곡 찾기</a>
+# Streamlit reruns with those params; we process here and clear immediately.
+if st.query_params.get("fs") == "1":
+    _fs_name = st.query_params.get("fn", "")
+    _fs_artist = st.query_params.get("fa", "")
+    st.query_params.clear()
+    if _fs_name:
+        try:
+            with st.spinner("비슷한 곡을 찾고 있어요..."):
+                _raw_recs = engine.recommend_similar(
+                    seed_track=_fs_name, seed_artist=_fs_artist, top_k=8,
+                )
+            _recommendations = _filter_recommendations(_raw_recs)[:4]
+            _response_text = (
+                f"'{_fs_name}'와(과) 비슷한 분위기의 곡들을 찾아봤어요."
+                if _recommendations else _FALLBACK_REASK
+            )
+        except Exception:
+            _recommendations = []
+            _response_text = "서버 연결에 실패했어요. 잠시 후 다시 시도해주세요."
+        _msg_id = st.session_state._next_msg_id
+        st.session_state._next_msg_id += 1
+        st.session_state.active_feedback_id = _msg_id if _recommendations else None
+        st.session_state.messages.append({
+            "id": _msg_id,
+            "role": "assistant",
+            "content": _response_text,
+            "recommendations": _recommendations or None,
+        })
+        st.rerun()
+
 # ── Replay chat history ───────────────────────────────────────
 for msg in st.session_state.messages:
+    _is_active = msg.get("id") == st.session_state.active_feedback_id
     render_chat_message(
         msg["role"], msg["content"], msg.get("recommendations"),
-        show_feedback=(msg.get("id") == st.session_state.active_feedback_id),
+        show_feedback=_is_active,
+        msg_id=msg.get("id") if _is_active else None,
     )
 
 # ── Chat input ────────────────────────────────────────────────
@@ -187,10 +229,16 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
                 and not seed_artist_val
                 and engine.is_ambiguous_title(seed_track_val)
             ):
+                artists = (
+                    engine.df[
+                        engine.df["track_name"].str.lower() == seed_track_val.lower()
+                    ]["track_artist"]
+                    .unique()[:3]
+                )
+                examples = ", ".join(f"'{seed_track_val} - {a}'" for a in artists)
                 response_text = (
                     f"'{seed_track_val}'이라는 제목의 곡이 여러 아티스트에게 있어요. "
-                    "어떤 아티스트의 곡인지 알려주시면 더 정확하게 찾아드릴게요! "
-                    "(예: 'Stay - Justin Bieber')"
+                    f"어떤 버전을 찾으시나요? (예: {examples})"
                 )
                 recommendations = []
             else:

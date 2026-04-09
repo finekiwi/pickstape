@@ -176,7 +176,8 @@ def _parse_intent_fallback(
             break
 
     # seed_track: 1) quoted text, 2) "X 비슷한/같은/유사" pattern
-    quoted = re.search(r"""['\u2018\u2019\u201c\u201d"'](.+?)['\u2018\u2019\u201c\u201d"']""", user_input)
+    # Handles straight quotes, curly quotes ('' ""), and Korean angle quotes (『』)
+    quoted = re.search(r"""['\u2018\u2019\u201c\u201d\u300e\u300f"'](.+?)['\u2018\u2019\u201c\u201d\u300e\u300f"']""", user_input)
     if quoted:
         params["seed_track"] = quoted.group(1).strip()
     else:

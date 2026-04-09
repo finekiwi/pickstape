@@ -12,7 +12,7 @@ import base64
 import html
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import streamlit as st
 
@@ -94,7 +94,7 @@ def _bar_color(value: float) -> str:
 
 
 def _vbar(label: str, value: float) -> str:
-    height = int(round(value * 24))
+    height = int(round(value * 20))
     color = _bar_color(value)
     return (
         f'<div class="vbar-col">'
@@ -104,20 +104,27 @@ def _vbar(label: str, value: float) -> str:
     )
 
 
-def _build_card_html(track: dict) -> str:
-    """Build VHS cassette card HTML string for one track dict."""
+def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
+    """Build the full VHS cassette card as a single HTML string.
+
+    Includes an explicit .vhs-inner-panel (white) so the white panel is
+    always rendered as part of the HTML — not dependent on Streamlit DOM
+    structure. Spotify link is an HTML anchor inside .card-actions.
+    When show_find_similar=True, a visual placeholder div is rendered in
+    .card-actions to reserve vertical space; the actual clickable button
+    is a Streamlit st.button() rendered separately (see render_recommendation_card).
+    """
     name = html.escape(track.get("track_name", "Unknown"))
     artist = html.escape(track.get("track_artist", "Unknown"))
     album = html.escape(track.get("track_album_name", "") or "")
-    genres: list[str] = [
-        html.escape(g) for g in (track.get("playlist_genres") or [])[:2]
-    ]
+    genres: list[str] = [html.escape(g) for g in (track.get("playlist_genres") or [])[:2]]
     energy = track.get("energy", 0.0)
     valence = track.get("valence", 0.0)
     danceability = track.get("danceability", 0.0)
     acousticness = track.get("acousticness", 0.0)
     instrumentalness = track.get("instrumentalness", 0.0)
     tempo_norm = min(track.get("tempo", 0.0) / 240.0, 1.0)
+    track_id = track.get("track_id", "")
 
     badges_html = "".join(f'<span class="genre-badge">{g}</span>' for g in genres)
     bars_html = (
@@ -128,58 +135,80 @@ def _build_card_html(track: dict) -> str:
         + _vbar("V", valence)
         + _vbar("T", tempo_norm)
     )
-    track_id = track.get("track_id", "")
-    spotify_btn = (
+    spotify_html = (
         f'<a class="spotify-btn" href="https://open.spotify.com/track/{quote(track_id, safe="")}" '
         f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
         if track_id else ""
     )
+    find_similar_html = ""
+    if show_find_similar:
+        href = "?" + urlencode({"fs": "1", "fn": track.get("track_name", ""), "fa": track.get("track_artist", "")})
+        find_similar_html = (
+            f'<a class="find-similar-btn" href="{html.escape(href)}">비슷한 곡 찾기</a>'
+        )
     return (
         f'<div class="vhs-card">'
         f'  <div class="vhs-header">'
         f'    <span class="vhs-label">SIDE A</span>'
         f'    <div class="vhs-reels">{_REEL_HTML}</div>'
         f'  </div>'
-        f'  <div class="vhs-tape-label">'
-        f'    <div class="card-title">{name}</div>'
-        f'    <div class="card-meta">{artist} &middot; {album}</div>'
-        f'    <div class="card-badges">{badges_html}</div>'
-        f'    {spotify_btn}'
+        f'  <div class="vhs-inner-panel">'
+        f'    <div class="card-main">'
+        f'      <div class="card-info">'
+        f'        <div class="card-title">{name}</div>'
+        f'        <div class="card-meta">{artist} &middot; {album}</div>'
+        f'        <div class="card-badges">{badges_html}</div>'
+        f'      </div>'
+        f'      <div class="card-actions">'
+        f'        {spotify_html}'
+        f'        {find_similar_html}'
+        f'      </div>'
+        f'    </div>'
         f'  </div>'
         f'  <div class="vbar-row">{bars_html}</div>'
         f'</div>'
     )
 
 
-def render_recommendation_card(track: dict) -> None:
-    """Render a single VHS cassette card for one track dict."""
-    st.markdown(_build_card_html(track), unsafe_allow_html=True)
+def render_recommendation_card(track: dict, show_find_similar: bool = False) -> None:
+    """Render a single VHS cassette card as a self-contained HTML block.
+
+    Both Spotify and '비슷한 곡 찾기' are HTML anchors — no st.button needed.
+    '비슷한 곡 찾기' sets URL query params on click; app.py detects them via
+    st.query_params and calls engine.recommend_similar().
+    """
+    st.markdown(_build_card_html(track, show_find_similar), unsafe_allow_html=True)
 
 
 def render_recommendation_cards(
     recommendations: list[dict],
     show_feedback: bool = False,
+    msg_id: int | None = None,
 ) -> None:
     """Render recommendation dicts as VHS cassette cards in a 2-column grid.
 
     Parameters
     ----------
     recommendations:
-        List of dicts from the recommendation engine. Expected keys:
-        track_name, track_artist, track_album_name, playlist_genres (list),
-        energy, valence, danceability, acousticness, instrumentalness,
-        tempo (raw BPM float).
+        List of dicts from the recommendation engine.
     show_feedback:
-        If True, render the feedback UI below the cards. Only the latest
-        recommendation turn should pass True.
+        If True, render the feedback UI. Only the latest turn passes True.
+    msg_id:
+        Controls whether '비슷한 곡 찾기' link appears on cards.
+        Only the active turn (show_feedback=True, msg_id set) shows the link.
     """
+    show_find_similar = show_feedback and msg_id is not None
+
     for i in range(0, len(recommendations), 2):
         cols = st.columns(2)
         for j, col in enumerate(cols):
             idx = i + j
             if idx < len(recommendations):
                 with col:
-                    render_recommendation_card(recommendations[idx])
+                    render_recommendation_card(
+                        recommendations[idx],
+                        show_find_similar=show_find_similar,
+                    )
 
     if not show_feedback:
         return
@@ -204,26 +233,9 @@ def render_chat_message(
     content: str,
     recommendations: list[dict] | None = None,
     show_feedback: bool = False,
+    msg_id: int | None = None,
 ) -> None:
-    """Render a single chat message bubble.
-
-    Used for both history replay and real-time response rendering so that
-    the output is identical in both cases.
-
-    Parameters
-    ----------
-    role:
-        "user" or "assistant".
-    content:
-        The message text.
-    recommendations:
-        Optional list of recommendation dicts. Rendered as cards below
-        the message text when present and non-empty.
-    show_feedback:
-        If True, render the feedback UI below the recommendation cards.
-        Should be True only for the active recommendation turn
-        (controlled by app.py via active_feedback_id).
-    """
+    """Render a single chat message bubble."""
     if role == "user":
         st.markdown(
             f'<div style="background-color:#FFF0F5;padding:12px 16px;'
@@ -238,4 +250,8 @@ def render_chat_message(
     with st.chat_message(role, avatar=avatar):
         st.markdown(content)
         if recommendations:
-            render_recommendation_cards(recommendations, show_feedback=show_feedback)
+            render_recommendation_cards(
+                recommendations,
+                show_feedback=show_feedback,
+                msg_id=msg_id,
+            )
