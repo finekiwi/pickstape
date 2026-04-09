@@ -46,7 +46,9 @@ def render_recommendation_cards(recommendations: list[dict]) -> None:
         name = track.get("track_name", "Unknown")
         artist = track.get("track_artist", "Unknown")
         album = track.get("track_album_name", "")
-        genres: list[str] = track.get("playlist_genres") or []
+        # Limit to 2 genres — tracks can belong to many playlists and accumulate
+        # 4+ genre tags, which looks cluttered and prompts unnecessary questions.
+        genres: list[str] = (track.get("playlist_genres") or [])[:2]
         energy = track.get("energy", 0.0)
         valence = track.get("valence", 0.0)
         danceability = track.get("danceability", 0.0)

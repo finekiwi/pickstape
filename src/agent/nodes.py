@@ -12,6 +12,11 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+# Matches at least one full Korean syllable (AC00–D7A3) or Latin letter.
+# Inputs that contain only jamo (ㅋ, ㅠ, …), punctuation, or digits do not
+# carry enough semantic content to route — they fall back to FALLBACK_REASK.
+_HAS_CONTENT_RE = re.compile(r"[가-힣a-zA-Z]")
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.agent.prompts import FALLBACK_REASK, RESPONSE_SYSTEM_PROMPT, ROUTER_SYSTEM_PROMPT
@@ -261,6 +266,10 @@ def create_nodes(
     def router_node(state: AgentState) -> dict:
         """Classify user intent and extract recommendation parameters."""
         user_input = state["user_input"]
+
+        # Guard: no full syllables or Latin letters → not routable content.
+        if not _HAS_CONTENT_RE.search(user_input):
+            return {"intent": "fallback", "params": {}}
 
         try:
             llm = router_llm_factory()
