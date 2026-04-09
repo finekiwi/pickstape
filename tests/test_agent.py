@@ -24,65 +24,23 @@ from src.agent.nodes import (
 from src.agent.prompts import FALLBACK_REASK
 from src.recommender.engine import RecommendationEngine
 from src.recommender.preprocess import COSINE_FEATURES
-
-
-# ---------------------------------------------------------------------------
-# Synthetic fixture (reused from test_engine.py pattern)
-# ---------------------------------------------------------------------------
-
-def _make_row(
-    track_id: str,
-    track_name: str,
-    track_artist: str,
-    track_popularity: int,
-    valence: float,
-    energy: float,
-    danceability: float,
-    acousticness: float,
-    speechiness: float,
-    instrumentalness: float,
-    liveness: float,
-    tempo: float,
-    loudness: float,
-    mental_health_label: str,
-    genres: list[str],
-) -> dict:
-    return {
-        "track_id": track_id,
-        "track_name": track_name,
-        "track_artist": track_artist,
-        "track_album_name": "Album",
-        "track_popularity": track_popularity,
-        "valence": valence,
-        "energy": energy,
-        "danceability": danceability,
-        "acousticness": acousticness,
-        "speechiness": speechiness,
-        "instrumentalness": instrumentalness,
-        "liveness": liveness,
-        "tempo": tempo,
-        "tempo_norm": tempo / 240.0,
-        "loudness": loudness,
-        "Mental_Health_Label": mental_health_label,
-        "playlist_genres": genres,
-        "playlist_subgenres": [],
-    }
+from conftest import make_row
 
 
 @pytest.fixture(scope="module")
 def sample_engine() -> RecommendationEngine:
     """RecommendationEngine with synthetic data covering basic cases."""
     rows = [
-        _make_row("h1", "Happy Song", "Artist A", 80, 0.8, 0.7, 0.7, 0.1, 0.05, 0.0, 0.1, 120.0, -6.0, "Normal/Unclassified", ["pop"]),
-        _make_row("h2", "Happy Song B", "Artist B", 70, 0.75, 0.6, 0.65, 0.2, 0.06, 0.0, 0.2, 115.0, -7.0, "Normal/Unclassified", ["pop", "r&b"]),
-        _make_row("s1", "Sad Song", "Artist C", 65, 0.2, 0.3, 0.4, 0.6, 0.05, 0.0, 0.1, 80.0, -12.0, "Normal/Unclassified", ["r&b"]),
-        _make_row("s2", "Sad Song B", "Artist D", 55, 0.1, 0.2, 0.35, 0.7, 0.04, 0.0, 0.05, 75.0, -14.0, "Normal/Unclassified", ["rock"]),
-        _make_row("c1", "Cafe Chill", "Artist E", 60, 0.4, 0.3, 0.5, 0.5, 0.05, 0.0, 0.1, 90.0, -10.0, "Normal/Unclassified", ["pop"]),
-        _make_row("c2", "Cafe Jazz", "Artist F", 50, 0.35, 0.2, 0.45, 0.6, 0.04, 0.0, 0.15, 85.0, -11.0, "Normal/Unclassified", ["r&b"]),
-        _make_row("p1", "Party Hit", "Artist G", 90, 0.85, 0.9, 0.85, 0.05, 0.04, 0.0, 0.1, 130.0, -4.0, "Normal/Unclassified", ["edm"]),
-        _make_row("p2", "Party Anthem", "Artist H", 85, 0.9, 0.85, 0.9, 0.03, 0.03, 0.0, 0.15, 135.0, -3.5, "Normal/Unclassified", ["edm"]),
-        _make_row("sl1", "Sleep Well", "Artist I", 40, 0.25, 0.15, 0.3, 0.8, 0.03, 0.5, 0.05, 60.0, -20.0, "Normal/Unclassified", ["pop"]),
-        _make_row("sl2", "Dream On", "Artist J", 35, 0.3, 0.1, 0.25, 0.7, 0.02, 0.6, 0.04, 55.0, -22.0, "Normal/Unclassified", ["r&b"]),
+        make_row("h1", "Happy Song", "Artist A", 80, 0.8, 0.7, 0.7, 0.1, 0.05, 0.0, 0.1, 120.0, -6.0, "Normal/Unclassified", ["pop"]),
+        make_row("h2", "Happy Song B", "Artist B", 70, 0.75, 0.6, 0.65, 0.2, 0.06, 0.0, 0.2, 115.0, -7.0, "Normal/Unclassified", ["pop", "r&b"]),
+        make_row("s1", "Sad Song", "Artist C", 65, 0.2, 0.3, 0.4, 0.6, 0.05, 0.0, 0.1, 80.0, -12.0, "Normal/Unclassified", ["r&b"]),
+        make_row("s2", "Sad Song B", "Artist D", 55, 0.1, 0.2, 0.35, 0.7, 0.04, 0.0, 0.05, 75.0, -14.0, "Normal/Unclassified", ["rock"]),
+        make_row("c1", "Cafe Chill", "Artist E", 60, 0.4, 0.3, 0.5, 0.5, 0.05, 0.0, 0.1, 90.0, -10.0, "Normal/Unclassified", ["pop"]),
+        make_row("c2", "Cafe Jazz", "Artist F", 50, 0.35, 0.2, 0.45, 0.6, 0.04, 0.0, 0.15, 85.0, -11.0, "Normal/Unclassified", ["r&b"]),
+        make_row("p1", "Party Hit", "Artist G", 90, 0.85, 0.9, 0.85, 0.05, 0.04, 0.0, 0.1, 130.0, -4.0, "Normal/Unclassified", ["edm"]),
+        make_row("p2", "Party Anthem", "Artist H", 85, 0.9, 0.85, 0.9, 0.03, 0.03, 0.0, 0.15, 135.0, -3.5, "Normal/Unclassified", ["edm"]),
+        make_row("sl1", "Sleep Well", "Artist I", 40, 0.25, 0.15, 0.3, 0.8, 0.03, 0.5, 0.05, 60.0, -20.0, "Normal/Unclassified", ["pop"]),
+        make_row("sl2", "Dream On", "Artist J", 35, 0.3, 0.1, 0.25, 0.7, 0.02, 0.6, 0.04, 55.0, -22.0, "Normal/Unclassified", ["r&b"]),
     ]
     df = pd.DataFrame(rows)
     feature_matrix = df[COSINE_FEATURES].values.astype(np.float64)
