@@ -26,6 +26,18 @@ from src.recommender.preprocess import COSINE_FEATURES
 # Features that use raw scale (not [0, 1]) — only affects _widen_ranges clamp logic
 _RAW_SCALE_FEATURES: frozenset[str] = frozenset({"tempo", "loudness"})
 
+# Track names that must never appear in recommendations regardless of audio features.
+# Titles that carry distressing connotations or are inappropriate for the demo context.
+_TITLE_BLOCKLIST: frozenset[str] = frozenset({
+    "suicidal",
+    "suicide",
+    "kill yourself",
+    "kys",
+    "die",
+    "i want to die",
+    "self harm",
+})
+
 # Columns included in each result dict
 _RESULT_COLUMNS: list[str] = [
     "track_id",
@@ -322,9 +334,14 @@ class RecommendationEngine:
 
         Returns only the columns in _RESULT_COLUMNS. Mental_Health_Label is
         intentionally excluded (ADR-004: never expose diagnosis labels to UI).
+        Tracks whose names match _TITLE_BLOCKLIST are silently dropped.
         """
         available = [c for c in _RESULT_COLUMNS if c in self.df.columns]
-        return self.df.iloc[indices][available].to_dict("records")
+        rows = self.df.iloc[indices][available].to_dict("records")
+        return [
+            r for r in rows
+            if r.get("track_name", "").lower() not in _TITLE_BLOCKLIST
+        ]
 
     def _widen_ranges(
         self,
