@@ -1,6 +1,6 @@
 """Reusable Streamlit UI components for Pickstape.
 
-Three public functions:
+Public functions:
 - render_sidebar()              — sidebar branding and usage hints
 - render_recommendation_cards() — cassette-style track cards
 - render_chat_message()         — unified chat bubble renderer
