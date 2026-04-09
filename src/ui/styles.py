@@ -161,8 +161,8 @@ BASE_CSS: str = """
     background-color: #FFFFFF;
     border-radius: 8px;
     margin: 8px 10px 6px;
-    padding: 12px 14px;
-    overflow: hidden;  /* prevent card-actions white bg bleeding into vbar area */
+    padding: 10px 12px;
+    overflow: hidden;
 }
 
 /* ── card-main: info (left) | actions (right) ─────────── */
@@ -203,46 +203,49 @@ BASE_CSS: str = """
     margin-bottom: 2px;
 }
 
-/* ── card-actions (right column, fixed width) ─────────── */
+/* ── card-actions (right column, compact) ────────────── */
 .card-actions {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
-    width: 110px;
+    width: 84px;
+    align-self: flex-start;
 }
 
-/* Spotify button: block, primary */
+/* Spotify button */
 .spotify-btn {
     display: block;
-    padding: 5px 8px;
+    padding: 3px 6px;
     background-color: #FFF0F5;
     color: #FF6B9D !important;
     border: 1px solid #FF6B9D;
-    border-radius: 10px;
-    font-size: 10px;
+    border-radius: 8px;
+    font-size: 9px;
     font-weight: 500;
     text-decoration: none !important;
     text-align: center;
     white-space: nowrap;
+    line-height: 1.4;
 }
 .spotify-btn:hover {
     background-color: #FFD4E5;
 }
 
-/* find-similar: secondary style, same column as spotify-btn */
+/* find-similar: secondary/dashed */
 .find-similar-btn {
     display: block;
-    padding: 5px 8px;
+    padding: 3px 6px;
     background-color: transparent;
     color: #C44B78 !important;
     border: 1px dashed #DDA0B4;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 9px;
     font-family: 'Galmuri11', monospace;
     text-decoration: none !important;
     text-align: center;
     white-space: nowrap;
+    line-height: 1.4;
 }
 .find-similar-btn:hover {
     background-color: #FFF0F5;
