@@ -276,7 +276,7 @@ BASE_CSS: str = """
     background-color: transparent;
     border-radius: 0;
     padding: 0 6px 3px;
-    margin: 0 10px 8px;
+    margin: 6px 10px 8px;
 }
 .vbar-col {
     display: flex;
