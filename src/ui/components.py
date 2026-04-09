@@ -104,51 +104,6 @@ def _vbar(label: str, value: float) -> str:
     )
 
 
-def _build_card_html(track: dict) -> str:
-    """Build VHS cassette card HTML string for one track dict.
-
-    Spotify and find-similar buttons are NOT included here — they are rendered
-    via st.columns in render_recommendation_card() so that native Streamlit
-    button interaction is possible.
-    """
-    name = html.escape(track.get("track_name", "Unknown"))
-    artist = html.escape(track.get("track_artist", "Unknown"))
-    album = html.escape(track.get("track_album_name", "") or "")
-    genres: list[str] = [
-        html.escape(g) for g in (track.get("playlist_genres") or [])[:2]
-    ]
-    energy = track.get("energy", 0.0)
-    valence = track.get("valence", 0.0)
-    danceability = track.get("danceability", 0.0)
-    acousticness = track.get("acousticness", 0.0)
-    instrumentalness = track.get("instrumentalness", 0.0)
-    tempo_norm = min(track.get("tempo", 0.0) / 240.0, 1.0)
-
-    badges_html = "".join(f'<span class="genre-badge">{g}</span>' for g in genres)
-    bars_html = (
-        _vbar("E", energy)
-        + _vbar("D", danceability)
-        + _vbar("A", acousticness)
-        + _vbar("I", instrumentalness)
-        + _vbar("V", valence)
-        + _vbar("T", tempo_norm)
-    )
-    return (
-        f'<div class="vhs-card">'
-        f'  <div class="vhs-header">'
-        f'    <span class="vhs-label">SIDE A</span>'
-        f'    <div class="vhs-reels">{_REEL_HTML}</div>'
-        f'  </div>'
-        f'  <div class="vhs-tape-label">'
-        f'    <div class="card-title">{name}</div>'
-        f'    <div class="card-meta">{artist} &middot; {album}</div>'
-        f'    <div class="card-badges">{badges_html}</div>'
-        f'  </div>'
-        f'  <div class="vbar-row">{bars_html}</div>'
-        f'</div>'
-    )
-
-
 def _spotify_link_html(track_id: str) -> str:
     """Return Spotify anchor tag HTML for a given track_id."""
     return (
@@ -162,44 +117,92 @@ def render_recommendation_card(
     show_find_similar: bool = False,
     btn_key: str | None = None,
 ) -> bool:
-    """Render a single VHS cassette card and its action buttons.
+    """Render a single VHS cassette card with action buttons inside the white area.
 
-    The card body (header, tape label, vbar) is rendered as HTML.
-    Below it, the Spotify link and optional "비슷한 곡 찾기" button are
-    rendered in st.columns([1, 1]) so they appear on the same row.
+    The card is built from individual st.markdown() blocks so that a native
+    st.button() can be placed between the tape-label and the vbar-row —
+    visually inside the card's white section. The enclosing column is styled
+    via CSS to appear as one unified card (background, border-radius, overflow).
 
-    Parameters
-    ----------
-    track:
-        Recommendation dict from the engine.
-    show_find_similar:
-        If True, render the "비슷한 곡 찾기" button in the right column.
-    btn_key:
-        Unique key for the find-similar button. Required when show_find_similar=True.
+    Layout (top → bottom within the column):
+        vhs-header  (pink, full-width)
+        vhs-tape-label  (white: title, artist, badges)
+        card-actions  (white: Spotify link | 비슷한 곡 찾기 button)
+        vbar-row  (pink decorative bottom)
 
     Returns
     -------
     bool
         True if the "비슷한 곡 찾기" button was clicked, False otherwise.
     """
-    st.markdown(_build_card_html(track), unsafe_allow_html=True)
-
+    name = html.escape(track.get("track_name", "Unknown"))
+    artist = html.escape(track.get("track_artist", "Unknown"))
+    album = html.escape(track.get("track_album_name", "") or "")
+    genres: list[str] = [html.escape(g) for g in (track.get("playlist_genres") or [])[:2]]
+    energy = track.get("energy", 0.0)
+    valence = track.get("valence", 0.0)
+    danceability = track.get("danceability", 0.0)
+    acousticness = track.get("acousticness", 0.0)
+    instrumentalness = track.get("instrumentalness", 0.0)
+    tempo_norm = min(track.get("tempo", 0.0) / 240.0, 1.0)
     track_id = track.get("track_id", "")
-    find_similar_clicked = False
 
+    badges_html = "".join(f'<span class="genre-badge">{g}</span>' for g in genres)
+    bars_html = (
+        _vbar("E", energy)
+        + _vbar("D", danceability)
+        + _vbar("A", acousticness)
+        + _vbar("I", instrumentalness)
+        + _vbar("V", valence)
+        + _vbar("T", tempo_norm)
+    )
+
+    # ── Header (pink strip) ───────────────────────────────
+    st.markdown(
+        f'<div class="vhs-header">'
+        f'  <span class="vhs-label">SIDE A</span>'
+        f'  <div class="vhs-reels">{_REEL_HTML}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Tape label (white info area) ──────────────────────
+    st.markdown(
+        f'<div class="vhs-tape-label">'
+        f'  <div class="card-title">{name}</div>'
+        f'  <div class="card-meta">{artist} &middot; {album}</div>'
+        f'  <div class="card-badges">{badges_html}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Action buttons (white, between tape-label and vbar) ──
+    find_similar_clicked = False
     if show_find_similar and btn_key:
-        col_spotify, col_similar = st.columns([1, 1])
-        with col_spotify:
+        col_l, col_r = st.columns([1, 1])
+        with col_l:
             if track_id:
-                st.markdown(_spotify_link_html(track_id), unsafe_allow_html=True)
-        with col_similar:
+                st.markdown(
+                    f'<div class="card-action-cell">{_spotify_link_html(track_id)}</div>',
+                    unsafe_allow_html=True,
+                )
+        with col_r:
             find_similar_clicked = st.button(
                 "비슷한 곡 찾기",
                 key=btn_key,
                 use_container_width=True,
             )
     elif track_id:
-        st.markdown(_spotify_link_html(track_id), unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="card-action-cell">{_spotify_link_html(track_id)}</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Vbar (pink decorative bottom) ────────────────────
+    st.markdown(
+        f'<div class="vbar-row">{bars_html}</div>',
+        unsafe_allow_html=True,
+    )
 
     return find_similar_clicked
 

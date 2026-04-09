@@ -100,17 +100,41 @@ BASE_CSS: str = """
 }
 
 /* ── VHS Cassette Card ──────────────────────────────── */
-.vhs-card {
+/*
+ * The card is NOT a single HTML wrapper. Instead, each column in the
+ * 2-column recommendation grid is styled as a card via CSS :has().
+ * render_recommendation_card() emits separate st.markdown() blocks
+ * (header → tape-label → action buttons → vbar-row) so that a native
+ * st.button() can live inside the card's white section.
+ */
+
+/* Outer card: target the column that contains a .vhs-header */
+[data-testid="column"]:has(.vhs-header) {
     background-color: #FFC8DC;
     border-radius: 14px;
-    padding: 12px;
+    overflow: hidden;
     margin-bottom: 16px;
-    transition: border 0.15s, background-color 0.15s;
-    border: 2px solid transparent;
+    transition: background-color 0.15s, outline 0.15s;
+    outline: 2px solid transparent;
 }
-.vhs-card:hover {
-    border: 2px solid #FF6B9D;
+[data-testid="column"]:has(.vhs-header):hover {
     background-color: #FFD4E5;
+    outline: 2px solid #FF6B9D;
+    outline-offset: -2px;
+}
+
+/* Collapse default Streamlit spacing between card sections */
+[data-testid="column"]:has(.vhs-header) [data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+[data-testid="column"]:has(.vhs-header) [data-testid="stVerticalBlock"] > div {
+    margin-bottom: 0 !important;
+}
+[data-testid="column"]:has(.vhs-header) .stMarkdown {
+    line-height: 0;  /* collapse wrapper height to content only */
+}
+[data-testid="column"]:has(.vhs-header) .stMarkdown > div {
+    line-height: normal;
 }
 
 .vhs-header {
@@ -118,9 +142,7 @@ BASE_CSS: str = """
     justify-content: space-between;
     align-items: center;
     background-color: #FF6B9D;
-    border-radius: 10px 10px 0 0;
     padding: 4px 12px;
-    margin: -12px -12px 10px -12px;
 }
 .vhs-label {
     font-family: 'Galmuri11', monospace;
@@ -151,23 +173,22 @@ BASE_CSS: str = """
 
 .vhs-tape-label {
     background-color: var(--bg-card);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 12px;
+    padding: 10px 12px 6px;
 }
 .card-title {
     font-size: 15px;
     font-weight: 500;
     color: var(--text-primary) !important;
     margin-bottom: 4px;
+    line-height: 1.3;
 }
 .card-meta {
     font-size: 12px;
     color: var(--text-secondary) !important;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 .card-badges {
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 .genre-badge {
     display: inline-block;
@@ -179,6 +200,23 @@ BASE_CSS: str = """
     margin-right: 4px;
 }
 
+/* ── Card action cell (Spotify / 비슷한 곡 찾기 row) ─── */
+.card-action-cell {
+    background-color: var(--bg-card);
+    padding: 6px 12px 8px;
+}
+
+/* Action row horizontal block (st.columns inside card) */
+[data-testid="column"]:has(.vhs-header) > [data-testid="stVerticalBlock"] > div:has([data-testid="stHorizontalBlock"]) {
+    background-color: var(--bg-card);
+}
+[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"] {
+    background-color: var(--bg-card);
+    padding: 4px 8px 8px;
+    gap: 4px !important;
+}
+
+/* ── Spotify button ──────────────────────────────────── */
 .spotify-btn {
     display: inline-block;
     padding: 4px 12px;
@@ -186,28 +224,27 @@ BASE_CSS: str = """
     color: #FF6B9D !important;
     border: 1px solid #FF6B9D;
     border-radius: 10px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     text-decoration: none !important;
+    white-space: nowrap;
 }
 
 /* ── Find Similar Button (비슷한 곡 찾기) ────────────── */
-/* Targets the st.button in the right column of the card btn row.
-   Selector is intentionally loose — scoped visually by card context. */
-.vhs-card + div [data-testid="stHorizontalBlock"] button[kind="secondary"] {
+[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"] button[kind="secondary"] {
     font-family: 'Galmuri11', monospace !important;
     font-size: 9px !important;
     background-color: transparent !important;
     color: #DDA0B4 !important;
     border: 1px dashed #DDA0B4 !important;
     border-radius: 10px !important;
-    padding: 2px 10px !important;
+    padding: 2px 8px !important;
     min-height: unset !important;
     height: auto !important;
     line-height: 1.4 !important;
     width: auto !important;
 }
-.vhs-card + div [data-testid="stHorizontalBlock"] button[kind="secondary"]:hover {
+[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"] button[kind="secondary"]:hover {
     background-color: #FFF0F5 !important;
     border-color: #FF6B9D !important;
     border-style: dashed !important;
