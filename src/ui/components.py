@@ -157,7 +157,7 @@ def render_recommendation_card(
         + _vbar("T", tempo_norm)
     )
 
-    # ── Header (pink strip) ───────────────────────────────
+    # ── Header (pink strip, full width) ──────────────────
     st.markdown(
         f'<div class="vhs-header">'
         f'  <span class="vhs-label">SIDE A</span>'
@@ -166,11 +166,12 @@ def render_recommendation_card(
         unsafe_allow_html=True,
     )
 
-    # ── Tape label: info (left) | actions (right) ─────────
-    # st.columns is used so that st.button() can live in the right column
-    # alongside the HTML Spotify link. CSS styles the whole area as white.
+    # ── White inner panel: info (left) | actions (right) ─
+    # st.columns lets st.button() live in the right column.
+    # CSS gives this block a white background + border-radius + margin
+    # so it reads as a distinct white panel inside the pink card body.
     find_similar_clicked = False
-    col_info, col_actions = st.columns([5, 3])
+    col_info, col_actions = st.columns([3, 2])
 
     with col_info:
         st.markdown(
@@ -183,19 +184,18 @@ def render_recommendation_card(
         )
 
     with col_actions:
+        st.markdown('<div class="card-actions">', unsafe_allow_html=True)
         if track_id:
-            st.markdown(
-                f'<div class="card-actions">{_spotify_link_html(track_id)}</div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(_spotify_link_html(track_id), unsafe_allow_html=True)
         if show_find_similar and btn_key:
             find_similar_clicked = st.button(
                 "비슷한 곡 찾기",
                 key=btn_key,
                 use_container_width=True,
             )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Vbar (pink decorative bottom) ────────────────────
+    # ── Vbar (pink decorative bottom, inset) ──────────────
     st.markdown(
         f'<div class="vbar-row">{bars_html}</div>',
         unsafe_allow_html=True,

@@ -171,24 +171,29 @@ BASE_CSS: str = """
     background: #FF6B9D;
 }
 
-/* ── Tape-label area (st.columns [5,3] — info | actions) ─ */
-/* The stHorizontalBlock containing .card-info IS the tape label */
+/* ── White inner panel (st.columns [3,2] inside pink card) ─
+ * The stHorizontalBlock containing .card-info becomes the white label
+ * panel. margin gives pink breathing room on all sides; border-radius
+ * makes it the rounded rectangle inside the cassette body.
+ */
 [data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) {
     background-color: var(--bg-card);
-    padding: 10px 12px 10px;
-    align-items: center;
+    border-radius: 8px;
+    margin: 8px 10px 6px;
+    padding: 10px 12px;
+    align-items: flex-start;
     gap: 8px !important;
 }
 [data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) > [data-testid="column"] {
-    background-color: var(--bg-card);
+    background-color: transparent !important;
     padding: 0 !important;
+    gap: 0 !important;
 }
 
-/* ── Card info (left column) ─────────────────────────── */
+/* ── Card info (left) ───────────────────────────────── */
 .card-info {
     display: flex;
     flex-direction: column;
-    gap: 0;
 }
 .card-title {
     font-size: 14px;
@@ -212,18 +217,18 @@ BASE_CSS: str = """
     border-radius: 10px;
     padding: 2px 7px;
     font-size: 9px;
-    margin-right: 4px;
+    margin-right: 3px;
+    margin-bottom: 2px;
 }
 
-/* ── Card actions (right column) ─────────────────────── */
+/* ── Card actions (right) ───────────────────────────── */
 .card-actions {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    align-items: stretch;
 }
 
-/* Spotify button: block, fills right column */
+/* Spotify button: block width, compact */
 .spotify-btn {
     display: block;
     padding: 4px 8px;
@@ -236,15 +241,15 @@ BASE_CSS: str = """
     text-decoration: none !important;
     text-align: center;
     white-space: nowrap;
+    margin-bottom: 4px;
 }
 
-/* ── Find Similar Button (비슷한 곡 찾기) ────────────── */
-/* Scoped to right column of the tape-label row */
+/* ── Find Similar Button ────────────────────────────── */
 [data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) [data-testid="column"]:last-child .stButton > button {
     font-family: 'Galmuri11', monospace !important;
     font-size: 9px !important;
     background-color: transparent !important;
-    color: #DDA0B4 !important;
+    color: #C44B78 !important;
     border: 1px dashed #DDA0B4 !important;
     border-radius: 10px !important;
     padding: 3px 6px !important;
@@ -256,19 +261,19 @@ BASE_CSS: str = """
 [data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) [data-testid="column"]:last-child .stButton > button:hover {
     background-color: #FFF0F5 !important;
     border-color: #FF6B9D !important;
-    border-style: dashed !important;
     color: #FF6B9D !important;
 }
 
-/* ── VHS Feature Bars (vertical) ────────────────────── */
+/* ── VHS Feature Bars (vertical) — inset from card edges ─ */
 .vbar-row {
     display: flex;
     align-items: flex-end;
     gap: 8px;
     height: 36px;
-    background-color: #FFC8DC;
-    border-radius: 0 0 10px 10px;
+    background-color: #FFB3CC;
+    border-radius: 6px;
     padding: 0 4px 4px;
+    margin: 0 10px 8px;
 }
 .vbar-col {
     display: flex;
