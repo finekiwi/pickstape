@@ -46,12 +46,13 @@ def _invoke_result(
     response_text: str = "테스트 추천 결과입니다.",
     recommendations: list[dict] | None = None,
     intent: str = "emotion",
+    params: dict | None = None,
 ) -> dict:
     """Build a mock graph.invoke() return value."""
     return {
         "user_input": "",
         "intent": intent,
-        "params": {},
+        "params": params or {},
         "recommendations": recommendations if recommendations is not None else [_sample_track()],
         "response_text": response_text,
         "error": None,
@@ -198,12 +199,15 @@ class TestChatFlow:
         assert user_msgs[0]["content"] == "우울한 기분에 어울리는 노래 추천해줘"
 
     def test_assistant_response_appended_to_history(self, make_app):
-        h = make_app(_invoke_result(response_text="잘 맞는 곡들이에요."))
+        # app.py uses template — LLM response_text is ignored
+        h = make_app(_invoke_result(response_text="LLM이 생성한 텍스트.", intent="emotion"))
         h.run(user_input="슬픈 노래 추천해줘")
 
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         assert len(assistant_msgs) == 2  # welcome + response
-        assert "잘 맞는 곡들이에요." in assistant_msgs[-1]["content"]
+        # Template (not LLM text) should appear
+        assert "LLM이 생성한 텍스트." not in assistant_msgs[-1]["content"]
+        assert "골라봤어요" in assistant_msgs[-1]["content"]
 
     def test_recommendations_stored_in_assistant_message(self, make_app):
         tracks = [_sample_track(track_name=f"Song {i}") for i in range(5)]
@@ -318,27 +322,11 @@ class TestPostProcessing:
         assert last.get("recommendations") is None
         assert "죄송해요" in last["content"]
 
-    def test_cjk_tokens_stripped_from_response_text(self, make_app):
-        """Response text containing CJK ideographs must have those tokens removed."""
+    def test_llm_response_text_ignored_always(self, make_app):
+        """app.py uses template — any LLM response_text (including foreign chars) is ignored."""
         h = make_app(
             _invoke_result(
-                response_text="분위기를營造하기 좋은 곡이에요.",
-                recommendations=[_sample_track()],
-            )
-        )
-        h.run(user_input="카페 음악 추천")
-
-        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
-        content = assistant_msgs[-1]["content"]
-        # The whole mixed token should be gone
-        assert "營造" not in content
-        assert "분위기를營造하기" not in content
-
-    def test_hiragana_stripped_from_response_text(self, make_app):
-        """Hiragana/katakana tokens are removed by _clean_text; Korean text preserved."""
-        h = make_app(
-            _invoke_result(
-                response_text="げてげて 좋은 곡이에요.",
+                response_text="자연스럽게げて좋은 곡 مرحبا이에요.",  # hiragana + Arabic
                 recommendations=[_sample_track()],
                 intent="emotion",
             )
@@ -347,23 +335,47 @@ class TestPostProcessing:
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         content = assistant_msgs[-1]["content"]
         assert "げ" not in content
-        assert "て" not in content
-        assert "곡이에요" in content
+        assert "مرحبا" not in content
+        assert "골라봤어요" in content  # template always applied
 
-    def test_arabic_triggers_intent_template(self, make_app):
-        """Response with Arabic script must be replaced by the intent template."""
+    def test_emotion_template_contains_mood_label(self, make_app):
+        """Emotion template includes Korean mood label when params.mood is provided."""
         h = make_app(
             _invoke_result(
-                response_text="좋은 곡 مرحبا이에요.",
+                intent="emotion",
+                params={"mood": "excited"},
                 recommendations=[_sample_track()],
+            )
+        )
+        h.run(user_input="신나는 노래 추천해줘")
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        assert "신나는" in assistant_msgs[-1]["content"]
+
+    def test_situation_template_contains_situation(self, make_app):
+        """Situation template mentions the specific situation."""
+        h = make_app(
+            _invoke_result(
                 intent="situation",
+                params={"situation": "카페"},
+                recommendations=[_sample_track()],
             )
         )
         h.run(user_input="카페 음악")
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
-        content = assistant_msgs[-1]["content"]
-        assert "مرحبا" not in content
-        assert "상황" in content  # situation template
+        assert "카페" in assistant_msgs[-1]["content"]
+
+    def test_similar_template_contains_seed_track(self, make_app):
+        """Similar template mentions the seed track name."""
+        h = make_app(
+            _invoke_result(
+                intent="similar",
+                params={"seed_track": "Yellow", "seed_artist": "Coldplay"},
+                recommendations=[_sample_track()],
+            )
+        )
+        h.run(user_input="Yellow 비슷한 곡")
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        assert "Yellow" in assistant_msgs[-1]["content"]
 
     def test_recommendations_capped_at_five(self, make_app):
         """Engine returning >5 tracks should be capped at 5 in stored recs."""
@@ -452,9 +464,9 @@ class TestErrorHandling:
         h.run(user_input="에러 유발")
 
         h.mock_graph.invoke.side_effect = None
-        h.set_invoke_result(response_text="정상 응답이에요.")
+        h.set_invoke_result(response_text="LLM 텍스트 — 무시됨.")
         h.run(user_input="재시도")
 
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         assert len(assistant_msgs) == 3  # welcome + error + normal
-        assert "정상 응답이에요." in assistant_msgs[-1]["content"]
+        assert "골라봤어요" in assistant_msgs[-1]["content"]  # template, not LLM text

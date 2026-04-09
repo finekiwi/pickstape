@@ -28,9 +28,9 @@ _RAW_SCALE_FEATURES: frozenset[str] = frozenset({"tempo", "loudness"})
 
 # Maximum BPM difference allowed when filtering similar-track results.
 # Applied as a soft filter: only activated when ≥ top_k candidates qualify.
-# 80 BPM catches large mismatches (e.g. Yellow ~86 BPM vs 186 BPM results)
-# without over-constraining fast genres.
-_TEMPO_DELTA: float = 80.0
+# 50 BPM: Yellow ~86 BPM → keep 36–136 BPM, filters 158+ BPM results.
+# Wide enough for fast genres: Blinding Lights ~171 BPM → keep 121–221 BPM.
+_TEMPO_DELTA: float = 50.0
 
 # Track names that must never appear in recommendations regardless of audio features.
 # Titles that carry distressing connotations or are inappropriate for the demo context.

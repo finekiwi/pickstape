@@ -63,6 +63,17 @@ RESPONSE_SYSTEM_PROMPT: str = """\
 - 곡이 없으면 "조금 더 구체적으로 알려주시겠어요?"라고 재질문해
 """
 
+# ── Short response templates (used instead of free LLM generation) ───────────
+# app.py uses a more contextual version (with mood/situation/seed_track).
+# These are used by response_node in the cached graph layer.
+
+RESPONSE_TEMPLATES: dict[str, str] = {
+    "emotion":   "지금 기분에 잘 어울리는 곡들을 골라봤어요. 마음에 드는 곡이 있길 바라요!",
+    "situation": "이 상황에 딱 맞는 곡들이에요. 좋은 시간 되세요!",
+    "similar":   "비슷한 느낌의 곡들을 찾아봤어요. 새로운 음악도 마음에 드셨으면 해요!",
+    "fallback":  "추천 곡을 골라봤어요.",
+}
+
 # ── Fallback messages ────────────────────────────────────────
 
 FALLBACK_REASK: str = (

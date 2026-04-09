@@ -24,7 +24,7 @@ _CJK_RE = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+")
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.agent.prompts import FALLBACK_REASK, RESPONSE_SYSTEM_PROMPT, ROUTER_SYSTEM_PROMPT
+from src.agent.prompts import FALLBACK_REASK, RESPONSE_SYSTEM_PROMPT, RESPONSE_TEMPLATES, ROUTER_SYSTEM_PROMPT
 from src.agent.state import AgentState
 from src.recommender.engine import RecommendationEngine
 from src.utils.config import get_llm
@@ -335,9 +335,7 @@ def create_nodes(
             return {"recommendations": []}
 
         try:
-            # Request more than needed so app.py's blocklist/dedup filter
-            # still leaves enough tracks (app.py truncates to 5 after filtering).
-            results = engine.recommend(intent, params, top_k=8)
+            results = engine.recommend(intent, params)
             return {"recommendations": results}
         except Exception as e:
             logger.exception("Recommendation engine error")
@@ -346,42 +344,22 @@ def create_nodes(
     # ── response_node ────────────────────────────────────────
 
     def response_node(state: AgentState) -> dict:
-        """Generate a natural Korean-language response from recommendations."""
+        """Return a short template response.
+
+        Free LLM generation was replaced with templates for stability.
+        Qwen3.5-4B produced inconsistent Korean, leaked foreign characters,
+        and used awkward phrasing — templates eliminate that risk entirely.
+        app.py builds a more contextual version using intent + params.
+        """
         recommendations = state.get("recommendations", [])
-        user_input = state.get("user_input", "")
         intent = state.get("intent", "fallback")
 
-        # No recommendations — return canned re-ask
         if not recommendations:
             return {
                 "response_text": FALLBACK_REASK,
                 "error": state.get("error", "No recommendations produced"),
             }
 
-        # Build concise context for LLM.
-        # Intentionally omit intent label — the LLM was echoing "emotion이라는
-        # 의도" back into responses, leaking internal routing details.
-        rec_text = _format_recommendations_for_llm(recommendations)
-        human_content = (
-            f"사용자 요청: {user_input}\n"
-            f"추천 결과:\n{rec_text}"
-        )
-
-        try:
-            llm = response_llm_factory()
-            messages = [
-                SystemMessage(content=RESPONSE_SYSTEM_PROMPT),
-                HumanMessage(content=human_content),
-            ]
-            response = llm.invoke(messages)
-            text = _clean_response(response.content or "")
-            if text:
-                return {"response_text": text}
-        except Exception:
-            logger.exception("Response LLM call failed")
-
-        # Template fallback
-        logger.warning("Using template fallback for response")
-        return {"response_text": _template_response(recommendations)}
+        return {"response_text": RESPONSE_TEMPLATES.get(intent, RESPONSE_TEMPLATES["fallback"])}
 
     return router_node, recommendation_node, response_node
