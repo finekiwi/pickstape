@@ -191,12 +191,10 @@ BASE_CSS: str = """
     text-decoration: none !important;
 }
 
-/* ── Find Similar Button (이 곡으로 더 찾기) ─────────── */
-.find-similar-wrap {
-    text-align: center;
-    margin-top: 2px;
-}
-.find-similar-wrap .stButton > button {
+/* ── Find Similar Button (비슷한 곡 찾기) ────────────── */
+/* Targets the st.button in the right column of the card btn row.
+   Selector is intentionally loose — scoped visually by card context. */
+.vhs-card + div [data-testid="stHorizontalBlock"] button[kind="secondary"] {
     font-family: 'Galmuri11', monospace !important;
     font-size: 9px !important;
     background-color: transparent !important;
@@ -209,7 +207,7 @@ BASE_CSS: str = """
     line-height: 1.4 !important;
     width: auto !important;
 }
-.find-similar-wrap .stButton > button:hover {
+.vhs-card + div [data-testid="stHorizontalBlock"] button[kind="secondary"]:hover {
     background-color: #FFF0F5 !important;
     border-color: #FF6B9D !important;
     border-style: dashed !important;

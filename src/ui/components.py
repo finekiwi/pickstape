@@ -105,7 +105,12 @@ def _vbar(label: str, value: float) -> str:
 
 
 def _build_card_html(track: dict) -> str:
-    """Build VHS cassette card HTML string for one track dict."""
+    """Build VHS cassette card HTML string for one track dict.
+
+    Spotify and find-similar buttons are NOT included here — they are rendered
+    via st.columns in render_recommendation_card() so that native Streamlit
+    button interaction is possible.
+    """
     name = html.escape(track.get("track_name", "Unknown"))
     artist = html.escape(track.get("track_artist", "Unknown"))
     album = html.escape(track.get("track_album_name", "") or "")
@@ -128,12 +133,6 @@ def _build_card_html(track: dict) -> str:
         + _vbar("V", valence)
         + _vbar("T", tempo_norm)
     )
-    track_id = track.get("track_id", "")
-    spotify_btn = (
-        f'<a class="spotify-btn" href="https://open.spotify.com/track/{quote(track_id, safe="")}" '
-        f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
-        if track_id else ""
-    )
     return (
         f'<div class="vhs-card">'
         f'  <div class="vhs-header">'
@@ -144,16 +143,65 @@ def _build_card_html(track: dict) -> str:
         f'    <div class="card-title">{name}</div>'
         f'    <div class="card-meta">{artist} &middot; {album}</div>'
         f'    <div class="card-badges">{badges_html}</div>'
-        f'    {spotify_btn}'
         f'  </div>'
         f'  <div class="vbar-row">{bars_html}</div>'
         f'</div>'
     )
 
 
-def render_recommendation_card(track: dict) -> None:
-    """Render a single VHS cassette card for one track dict."""
+def _spotify_link_html(track_id: str) -> str:
+    """Return Spotify anchor tag HTML for a given track_id."""
+    return (
+        f'<a class="spotify-btn" href="https://open.spotify.com/track/{quote(track_id, safe="")}" '
+        f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
+    )
+
+
+def render_recommendation_card(
+    track: dict,
+    show_find_similar: bool = False,
+    btn_key: str | None = None,
+) -> bool:
+    """Render a single VHS cassette card and its action buttons.
+
+    The card body (header, tape label, vbar) is rendered as HTML.
+    Below it, the Spotify link and optional "비슷한 곡 찾기" button are
+    rendered in st.columns([1, 1]) so they appear on the same row.
+
+    Parameters
+    ----------
+    track:
+        Recommendation dict from the engine.
+    show_find_similar:
+        If True, render the "비슷한 곡 찾기" button in the right column.
+    btn_key:
+        Unique key for the find-similar button. Required when show_find_similar=True.
+
+    Returns
+    -------
+    bool
+        True if the "비슷한 곡 찾기" button was clicked, False otherwise.
+    """
     st.markdown(_build_card_html(track), unsafe_allow_html=True)
+
+    track_id = track.get("track_id", "")
+    find_similar_clicked = False
+
+    if show_find_similar and btn_key:
+        col_spotify, col_similar = st.columns([1, 1])
+        with col_spotify:
+            if track_id:
+                st.markdown(_spotify_link_html(track_id), unsafe_allow_html=True)
+        with col_similar:
+            find_similar_clicked = st.button(
+                "비슷한 곡 찾기",
+                key=btn_key,
+                use_container_width=True,
+            )
+    elif track_id:
+        st.markdown(_spotify_link_html(track_id), unsafe_allow_html=True)
+
+    return find_similar_clicked
 
 
 def render_recommendation_cards(
@@ -195,26 +243,20 @@ def render_recommendation_cards(
             idx = i + j
             if idx < len(recommendations):
                 track = recommendations[idx]
+                track_id = track.get("track_id", str(idx))
+                btn_key = f"find_similar_{msg_id}_{track_id}" if show_find_similar else None
                 with col:
-                    render_recommendation_card(track)
-                    if show_find_similar:
-                        track_id = track.get("track_id", str(idx))
-                        btn_key = f"find_similar_{msg_id}_{track_id}"
-                        st.markdown(
-                            '<div class="find-similar-wrap">',
-                            unsafe_allow_html=True,
-                        )
-                        if selected_seed is None and st.button(
-                            "비슷한 곡 찾기",
-                            key=btn_key,
-                            use_container_width=True,
-                        ):
-                            selected_seed = {
-                                "track_name": track.get("track_name", ""),
-                                "track_artist": track.get("track_artist", ""),
-                                "track_id": track_id,
-                            }
-                        st.markdown("</div>", unsafe_allow_html=True)
+                    clicked = render_recommendation_card(
+                        track,
+                        show_find_similar=show_find_similar,
+                        btn_key=btn_key,
+                    )
+                    if clicked and selected_seed is None:
+                        selected_seed = {
+                            "track_name": track.get("track_name", ""),
+                            "track_artist": track.get("track_artist", ""),
+                            "track_id": track_id,
+                        }
 
     if not show_feedback:
         return selected_seed
