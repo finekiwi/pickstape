@@ -28,8 +28,10 @@ st.set_page_config(
 # carry no routeable intent — short-circuit to FALLBACK_REASK.
 _ROUTEABLE_RE = re.compile(r"[가-힣a-zA-Z]")
 
-# CJK ideographs leaked by Qwen into Korean responses.
-_CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+")
+# Matches any whitespace-delimited token that contains at least one CJK
+# ideograph — the entire token is dropped, not just the CJK character.
+# "분위기를營造하기" → whole token removed (vs. leaving "분위기를하기").
+_CJK_WORD_RE = re.compile(r"\S*[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+\S*")
 
 # Track titles that must never appear in the UI regardless of audio features.
 _TITLE_BLOCKLIST: frozenset[str] = frozenset({
@@ -50,18 +52,22 @@ def _is_routeable(text: str) -> bool:
 
 
 def _clean_text(text: str) -> str:
-    """Strip CJK runs and collapse leftover whitespace."""
-    cleaned = _CJK_RE.sub("", text)
-    return re.sub(r"  +", " ", cleaned).strip()
+    """Drop tokens containing CJK characters and collapse leftover whitespace."""
+    cleaned = _CJK_WORD_RE.sub("", text)
+    return re.sub(r" {2,}", " ", cleaned).strip()
 
 
 def _filter_recommendations(recs: list[dict]) -> list[dict]:
-    """Remove blocked titles and deduplicate by (track_name, track_artist)."""
+    """Blocklist → dedup by (track_name, track_artist).
+
+    Applied after graph.invoke() so it is immune to @st.cache_resource
+    retaining stale engine instances across hot reloads.
+    """
     seen: set[tuple[str, str]] = set()
     result: list[dict] = []
     for r in recs:
-        name = r.get("track_name", "").lower()
-        artist = r.get("track_artist", "").lower()
+        name = r.get("track_name", "").strip().lower()
+        artist = r.get("track_artist", "").strip().lower()
         if name in _TITLE_BLOCKLIST:
             continue
         key = (name, artist)
@@ -137,6 +143,8 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
                 result = graph.invoke({"user_input": user_input})
             response_text = _clean_text(result.get("response_text", ""))
             recommendations = _filter_recommendations(result.get("recommendations", []))
+            if not recommendations:
+                response_text = _FALLBACK_REASK
         except Exception:
             response_text = "서버 연결에 실패했어요. 잠시 후 다시 시도해주세요."
             recommendations = []

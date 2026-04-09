@@ -235,11 +235,111 @@ class TestChatFlow:
         assert h.mock_graph.invoke.call_count == 2
 
 
-# ── Tests: fallback intent ────────────────────────────────────
+# ── Tests: _is_routeable short-circuit ───────────────────────
+
+
+class TestIsRouteable:
+    """Non-routeable input bypasses graph.invoke() and returns FALLBACK_REASK."""
+
+    def test_jamo_only_does_not_invoke_graph(self, make_app):
+        """ㅋㅋㅋ contains no full Korean syllables → short-circuited."""
+        h = make_app()
+        h.run(user_input="ㅋㅋㅋ")
+        h.assert_no_exception()
+        h.mock_graph.invoke.assert_not_called()
+
+    def test_jamo_only_returns_fallback_message(self, make_app):
+        h = make_app()
+        h.run(user_input="ㅠㅠ")
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        assert "죄송해요" in assistant_msgs[-1]["content"]
+
+    def test_jamo_only_has_no_recommendations(self, make_app):
+        h = make_app()
+        h.run(user_input="ㅋㅋ")
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        assert assistant_msgs[-1].get("recommendations") is None
+
+    def test_punctuation_only_does_not_invoke_graph(self, make_app):
+        """??? contains no Korean or Latin letters."""
+        h = make_app()
+        h.run(user_input="???")
+        h.mock_graph.invoke.assert_not_called()
+
+    def test_korean_syllable_routes_to_graph(self, make_app):
+        """Input with full Korean syllables must reach graph.invoke()."""
+        h = make_app()
+        h.run(user_input="슬픈 노래 추천해줘")
+        h.mock_graph.invoke.assert_called_once()
+
+
+# ── Tests: post-processing ────────────────────────────────────
+
+
+class TestPostProcessing:
+    """app.py filters applied after graph.invoke(): blocklist, dedup, CJK cleaning."""
+
+    def test_blocklisted_track_removed_from_recommendations(self, make_app):
+        """Tracks whose name is in _TITLE_BLOCKLIST must not appear in stored recs."""
+        blocked = _sample_track(track_name="Suicidal", track_artist="YNW Melly")
+        safe = _sample_track(track_name="Good Vibes", track_artist="Artist B")
+        h = make_app(_invoke_result(recommendations=[blocked, safe]))
+        h.run(user_input="신나는 노래 추천해줘")
+
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        recs = assistant_msgs[-1].get("recommendations") or []
+        names = [r["track_name"] for r in recs]
+        assert "Suicidal" not in names
+        assert "Good Vibes" in names
+
+    def test_duplicate_tracks_deduped(self, make_app):
+        """Same (track_name, track_artist) pair must appear only once."""
+        dup = _sample_track(track_name="Lollipop", track_artist="Lil Wayne")
+        h = make_app(_invoke_result(recommendations=[dup, dup]))
+        h.run(user_input="힙합 추천해줘")
+
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        recs = assistant_msgs[-1].get("recommendations") or []
+        assert len(recs) == 1
+
+    def test_all_tracks_blocked_triggers_fallback_message(self, make_app):
+        """When every rec is filtered out, response_text must be FALLBACK_REASK."""
+        blocked = _sample_track(track_name="suicidal", track_artist="X")
+        h = make_app(
+            _invoke_result(
+                response_text="골라봤어요!",
+                recommendations=[blocked],
+            )
+        )
+        h.run(user_input="슬픈 노래")
+
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        last = assistant_msgs[-1]
+        assert last.get("recommendations") is None
+        assert "죄송해요" in last["content"]
+
+    def test_cjk_tokens_stripped_from_response_text(self, make_app):
+        """Response text containing CJK ideographs must have those tokens removed."""
+        h = make_app(
+            _invoke_result(
+                response_text="분위기를營造하기 좋은 곡이에요.",
+                recommendations=[_sample_track()],
+            )
+        )
+        h.run(user_input="카페 음악 추천")
+
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        content = assistant_msgs[-1]["content"]
+        # The whole mixed token should be gone
+        assert "營造" not in content
+        assert "분위기를營造하기" not in content
+
+
+# ── Tests: fallback intent (graph returns empty recs) ─────────
 
 
 class TestFallback:
-    """Fallback intent returns a re-ask message with no recommendations."""
+    """Graph returns empty recommendations → FALLBACK_REASK shown."""
 
     def test_fallback_response_has_no_recommendations(self, make_app):
         h = make_app(
@@ -249,7 +349,7 @@ class TestFallback:
                 intent="fallback",
             )
         )
-        h.run(user_input="ㅋㅋㅋ")
+        h.run(user_input="잘 모르겠어요")
         h.assert_no_exception()
 
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
@@ -257,15 +357,16 @@ class TestFallback:
         # empty list → None (app uses `recommendations or None`)
         assert last.get("recommendations") is None
 
-    def test_fallback_response_text_is_displayed(self, make_app):
+    def test_empty_recs_replaces_response_with_fallback(self, make_app):
+        """Even if LLM produced response text, empty recs must show FALLBACK_REASK."""
         h = make_app(
             _invoke_result(
-                response_text="죄송해요, 요청을 정확히 이해하지 못했어요.",
+                response_text="골라봤어요!",
                 recommendations=[],
                 intent="fallback",
             )
         )
-        h.run(user_input="???")
+        h.run(user_input="아무거나 추천해줘")
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         assert "죄송해요" in assistant_msgs[-1]["content"]
 
