@@ -104,36 +104,15 @@ def _vbar(label: str, value: float) -> str:
     )
 
 
-def _spotify_link_html(track_id: str) -> str:
-    """Return Spotify anchor tag HTML for a given track_id."""
-    return (
-        f'<a class="spotify-btn" href="https://open.spotify.com/track/{quote(track_id, safe="")}" '
-        f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
-    )
+def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
+    """Build the full VHS cassette card as a single HTML string.
 
-
-def render_recommendation_card(
-    track: dict,
-    show_find_similar: bool = False,
-    btn_key: str | None = None,
-) -> bool:
-    """Render a single VHS cassette card with action buttons inside the white area.
-
-    The card is built from individual st.markdown() blocks so that a native
-    st.button() can be placed between the tape-label and the vbar-row —
-    visually inside the card's white section. The enclosing column is styled
-    via CSS to appear as one unified card (background, border-radius, overflow).
-
-    Layout (top → bottom within the column):
-        vhs-header  (pink, full-width)
-        vhs-tape-label  (white: title, artist, badges)
-        card-actions  (white: Spotify link | 비슷한 곡 찾기 button)
-        vbar-row  (pink decorative bottom)
-
-    Returns
-    -------
-    bool
-        True if the "비슷한 곡 찾기" button was clicked, False otherwise.
+    Includes an explicit .vhs-inner-panel (white) so the white panel is
+    always rendered as part of the HTML — not dependent on Streamlit DOM
+    structure. Spotify link is an HTML anchor inside .card-actions.
+    When show_find_similar=True, a visual placeholder div is rendered in
+    .card-actions to reserve vertical space; the actual clickable button
+    is a Streamlit st.button() rendered separately (see render_recommendation_card).
     """
     name = html.escape(track.get("track_name", "Unknown"))
     artist = html.escape(track.get("track_artist", "Unknown"))
@@ -156,52 +135,59 @@ def render_recommendation_card(
         + _vbar("V", valence)
         + _vbar("T", tempo_norm)
     )
-
-    # ── Header (pink strip, full width) ──────────────────
-    st.markdown(
-        f'<div class="vhs-header">'
-        f'  <span class="vhs-label">SIDE A</span>'
-        f'  <div class="vhs-reels">{_REEL_HTML}</div>'
-        f'</div>',
-        unsafe_allow_html=True,
+    spotify_html = (
+        f'<a class="spotify-btn" href="https://open.spotify.com/track/{quote(track_id, safe="")}" '
+        f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
+        if track_id else ""
+    )
+    # Placeholder reserves the same height as the real st.button so the
+    # card's inner-panel height stays consistent whether the button is shown or not.
+    find_similar_placeholder = (
+        '<div class="find-similar-placeholder">비슷한 곡 찾기</div>'
+        if show_find_similar else ""
+    )
+    return (
+        f'<div class="vhs-card">'
+        f'  <div class="vhs-header">'
+        f'    <span class="vhs-label">SIDE A</span>'
+        f'    <div class="vhs-reels">{_REEL_HTML}</div>'
+        f'  </div>'
+        f'  <div class="vhs-inner-panel">'
+        f'    <div class="card-main">'
+        f'      <div class="card-info">'
+        f'        <div class="card-title">{name}</div>'
+        f'        <div class="card-meta">{artist} &middot; {album}</div>'
+        f'        <div class="card-badges">{badges_html}</div>'
+        f'      </div>'
+        f'      <div class="card-actions">'
+        f'        {spotify_html}'
+        f'        {find_similar_placeholder}'
+        f'      </div>'
+        f'    </div>'
+        f'  </div>'
+        f'  <div class="vbar-row">{bars_html}</div>'
+        f'</div>'
     )
 
-    # ── White inner panel: info (left) | actions (right) ─
-    # st.columns lets st.button() live in the right column.
-    # CSS gives this block a white background + border-radius + margin
-    # so it reads as a distinct white panel inside the pink card body.
-    find_similar_clicked = False
-    col_info, col_actions = st.columns([3, 2])
 
-    with col_info:
-        st.markdown(
-            f'<div class="card-info">'
-            f'  <div class="card-title">{name}</div>'
-            f'  <div class="card-meta">{artist} &middot; {album}</div>'
-            f'  <div class="card-badges">{badges_html}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+def render_recommendation_card(
+    track: dict,
+    show_find_similar: bool = False,
+    btn_key: str | None = None,
+) -> bool:
+    """Render a single VHS cassette card.
 
-    with col_actions:
-        st.markdown('<div class="card-actions">', unsafe_allow_html=True)
-        if track_id:
-            st.markdown(_spotify_link_html(track_id), unsafe_allow_html=True)
-        if show_find_similar and btn_key:
-            find_similar_clicked = st.button(
-                "비슷한 곡 찾기",
-                key=btn_key,
-                use_container_width=True,
-            )
-        st.markdown('</div>', unsafe_allow_html=True)
+    The card HTML (including the white inner panel) is rendered as a single
+    st.markdown() block. When show_find_similar=True, the HTML contains a
+    visual placeholder in .card-actions and the real clickable button is
+    rendered immediately after with CSS aligning it over the placeholder.
 
-    # ── Vbar (pink decorative bottom, inset) ──────────────
-    st.markdown(
-        f'<div class="vbar-row">{bars_html}</div>',
-        unsafe_allow_html=True,
-    )
-
-    return find_similar_clicked
+    Returns True if '비슷한 곡 찾기' was clicked.
+    """
+    st.markdown(_build_card_html(track, show_find_similar), unsafe_allow_html=True)
+    if show_find_similar and btn_key:
+        return st.button("비슷한 곡 찾기", key=btn_key)
+    return False
 
 
 def render_recommendation_cards(

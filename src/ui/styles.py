@@ -101,40 +101,24 @@ BASE_CSS: str = """
 
 /* ── VHS Cassette Card ──────────────────────────────── */
 /*
- * The card is NOT a single HTML wrapper. Instead, each column in the
- * 2-column recommendation grid is styled as a card via CSS :has().
- * render_recommendation_card() emits separate st.markdown() blocks
- * (header → tape-label → action buttons → vbar-row) so that a native
- * st.button() can live inside the card's white section.
+ * Card is a single HTML block (st.markdown). The white inner panel
+ * (.vhs-inner-panel) is an explicit HTML element — no dependency on
+ * Streamlit DOM structure. Spotify button is an HTML anchor inside
+ * .card-actions. The find-similar st.button() is rendered after the
+ * card HTML; CSS pulls it up with negative margin to sit flush with
+ * the card-actions area (right column of .card-main).
  */
-
-/* Outer card: target the column that contains a .vhs-header */
-[data-testid="column"]:has(.vhs-header) {
+.vhs-card {
     background-color: #FFC8DC;
     border-radius: 14px;
-    overflow: hidden;
-    margin-bottom: 16px;
-    transition: background-color 0.15s, outline 0.15s;
-    outline: 2px solid transparent;
+    padding: 0;
+    margin-bottom: 4px;
+    transition: background-color 0.15s;
+    border: 2px solid transparent;
 }
-[data-testid="column"]:has(.vhs-header):hover {
+.vhs-card:hover {
     background-color: #FFD4E5;
-    outline: 2px solid #FF6B9D;
-    outline-offset: -2px;
-}
-
-/* Collapse default Streamlit spacing between card sections */
-[data-testid="column"]:has(.vhs-header) [data-testid="stVerticalBlock"] {
-    gap: 0 !important;
-}
-[data-testid="column"]:has(.vhs-header) [data-testid="stVerticalBlock"] > div {
-    margin-bottom: 0 !important;
-}
-[data-testid="column"]:has(.vhs-header) .stMarkdown {
-    line-height: 0;  /* collapse wrapper height to content only */
-}
-[data-testid="column"]:has(.vhs-header) .stMarkdown > div {
-    line-height: normal;
+    border-color: #FF6B9D;
 }
 
 .vhs-header {
@@ -142,7 +126,8 @@ BASE_CSS: str = """
     justify-content: space-between;
     align-items: center;
     background-color: #FF6B9D;
-    padding: 4px 12px;
+    border-radius: 12px 12px 0 0;
+    padding: 5px 12px;
 }
 .vhs-label {
     font-family: 'Galmuri11', monospace;
@@ -159,7 +144,7 @@ BASE_CSS: str = """
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 1.5px solid #FF6B9D;
+    border: 1.5px solid rgba(255,255,255,0.6);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -168,32 +153,27 @@ BASE_CSS: str = """
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #FF6B9D;
+    background: rgba(255,255,255,0.7);
 }
 
-/* ── White inner panel (st.columns [3,2] inside pink card) ─
- * The stHorizontalBlock containing .card-info becomes the white label
- * panel. margin gives pink breathing room on all sides; border-radius
- * makes it the rounded rectangle inside the cassette body.
- */
-[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) {
-    background-color: var(--bg-card);
+/* ── White inner panel ───────────────────────────────── */
+.vhs-inner-panel {
+    background-color: #FFFFFF;
     border-radius: 8px;
     margin: 8px 10px 6px;
-    padding: 10px 12px;
-    align-items: flex-start;
-    gap: 8px !important;
-}
-[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) > [data-testid="column"] {
-    background-color: transparent !important;
-    padding: 0 !important;
-    gap: 0 !important;
+    padding: 12px 14px;
 }
 
-/* ── Card info (left) ───────────────────────────────── */
-.card-info {
+/* ── card-main: info (left) | actions (right) ─────────── */
+.card-main {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+.card-info {
+    flex: 1;
+    min-width: 0;
 }
 .card-title {
     font-size: 14px;
@@ -201,6 +181,7 @@ BASE_CSS: str = """
     color: var(--text-primary) !important;
     margin-bottom: 3px;
     line-height: 1.3;
+    word-break: break-word;
 }
 .card-meta {
     font-size: 11px;
@@ -221,17 +202,19 @@ BASE_CSS: str = """
     margin-bottom: 2px;
 }
 
-/* ── Card actions (right) ───────────────────────────── */
+/* ── card-actions (right column, fixed width) ─────────── */
 .card-actions {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    flex-shrink: 0;
+    width: 110px;
 }
 
-/* Spotify button: block width, compact */
+/* Spotify button: block, primary */
 .spotify-btn {
     display: block;
-    padding: 4px 8px;
+    padding: 5px 8px;
     background-color: #FFF0F5;
     color: #FF6B9D !important;
     border: 1px solid #FF6B9D;
@@ -241,39 +224,34 @@ BASE_CSS: str = """
     text-decoration: none !important;
     text-align: center;
     white-space: nowrap;
-    margin-bottom: 4px;
+}
+.spotify-btn:hover {
+    background-color: #FFD4E5;
 }
 
-/* ── Find Similar Button ────────────────────────────── */
-[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) [data-testid="column"]:last-child .stButton > button {
-    font-family: 'Galmuri11', monospace !important;
-    font-size: 9px !important;
-    background-color: transparent !important;
-    color: #C44B78 !important;
-    border: 1px dashed #DDA0B4 !important;
-    border-radius: 10px !important;
-    padding: 3px 6px !important;
-    min-height: unset !important;
-    height: auto !important;
-    line-height: 1.4 !important;
-    width: 100% !important;
-}
-[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) [data-testid="column"]:last-child .stButton > button:hover {
-    background-color: #FFF0F5 !important;
-    border-color: #FF6B9D !important;
-    color: #FF6B9D !important;
+/* find-similar placeholder: invisible, reserves height for the real button */
+.find-similar-placeholder {
+    display: block;
+    padding: 5px 8px;
+    border: 1px dashed #DDA0B4;
+    border-radius: 10px;
+    font-size: 9px;
+    color: transparent;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
 }
 
-/* ── VHS Feature Bars (vertical) — inset from card edges ─ */
+/* ── VHS Feature Bars (vbar-row) ─────────────────────── */
 .vbar-row {
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    height: 36px;
-    background-color: #FFB3CC;
-    border-radius: 6px;
-    padding: 0 4px 4px;
-    margin: 0 10px 8px;
+    height: 32px;
+    background-color: #FFC8DC;
+    border-radius: 0 0 12px 12px;
+    padding: 0 6px 4px;
 }
 .vbar-col {
     display: flex;
@@ -293,6 +271,40 @@ BASE_CSS: str = """
     color: #C44B78;
     text-transform: uppercase;
     font-family: monospace;
+}
+
+/* ── Find-similar Streamlit button (below card HTML) ──── */
+/*
+ * The real st.button() renders after st.markdown(card_html).
+ * margin-top: -34px pulls it up to overlap the invisible placeholder
+ * in .card-actions. justify-content: flex-end + width: 110px aligns
+ * it to the right (matching .card-actions column width).
+ */
+[data-testid="column"]:has(.vhs-card) .stButton {
+    display: flex !important;
+    justify-content: flex-end !important;
+    margin-top: -34px !important;
+    padding-right: 24px !important;
+    position: relative;
+    z-index: 10;
+}
+[data-testid="column"]:has(.vhs-card) .stButton > button {
+    font-family: 'Galmuri11', monospace !important;
+    font-size: 9px !important;
+    background-color: #FFF8F0 !important;
+    color: #C44B78 !important;
+    border: 1px dashed #DDA0B4 !important;
+    border-radius: 10px !important;
+    padding: 5px 8px !important;
+    min-height: unset !important;
+    height: auto !important;
+    line-height: 1.4 !important;
+    width: 110px !important;
+}
+[data-testid="column"]:has(.vhs-card) .stButton > button:hover {
+    background-color: #FFF0F5 !important;
+    border-color: #FF6B9D !important;
+    color: #FF6B9D !important;
 }
 
 /* ── Sidebar Custom Components ──────────────────────── */
