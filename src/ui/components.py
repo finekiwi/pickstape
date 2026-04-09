@@ -159,7 +159,8 @@ def render_recommendation_card(track: dict) -> None:
 def render_recommendation_cards(
     recommendations: list[dict],
     show_feedback: bool = False,
-) -> None:
+    msg_id: int | None = None,
+) -> dict | None:
     """Render recommendation dicts as VHS cassette cards in a 2-column grid.
 
     Parameters
@@ -170,19 +171,53 @@ def render_recommendation_cards(
         energy, valence, danceability, acousticness, instrumentalness,
         tempo (raw BPM float).
     show_feedback:
-        If True, render the feedback UI below the cards. Only the latest
-        recommendation turn should pass True.
+        If True, render the feedback UI and "이 곡으로 더 찾기" buttons below
+        the cards. Only the latest recommendation turn should pass True.
+    msg_id:
+        Message ID used to generate unique button keys. Required for
+        "이 곡으로 더 찾기" buttons; buttons are hidden when None.
+
+    Returns
+    -------
+    dict | None
+        If a "이 곡으로 더 찾기" button was clicked, returns
+        {"track_name": str, "track_artist": str, "track_id": str}.
+        Returns None if no button was clicked.
+        Only the first click is captured (defensive against multiple True
+        returns, though Streamlit only returns True for one button per rerun).
     """
+    selected_seed: dict | None = None
+    show_find_similar = show_feedback and msg_id is not None
+
     for i in range(0, len(recommendations), 2):
         cols = st.columns(2)
         for j, col in enumerate(cols):
             idx = i + j
             if idx < len(recommendations):
+                track = recommendations[idx]
                 with col:
-                    render_recommendation_card(recommendations[idx])
+                    render_recommendation_card(track)
+                    if show_find_similar:
+                        track_id = track.get("track_id", str(idx))
+                        btn_key = f"find_similar_{msg_id}_{track_id}"
+                        st.markdown(
+                            '<div class="find-similar-wrap">',
+                            unsafe_allow_html=True,
+                        )
+                        if selected_seed is None and st.button(
+                            "이 곡으로 더 찾기",
+                            key=btn_key,
+                            use_container_width=True,
+                        ):
+                            selected_seed = {
+                                "track_name": track.get("track_name", ""),
+                                "track_artist": track.get("track_artist", ""),
+                                "track_id": track_id,
+                            }
+                        st.markdown("</div>", unsafe_allow_html=True)
 
     if not show_feedback:
-        return
+        return selected_seed
 
     # Feedback UI — UI only, no logic
     st.markdown(
@@ -198,13 +233,16 @@ def render_recommendation_cards(
         if st.button("다른 분위기로", key=f"fb_bad_{key_seed}", use_container_width=True):
             st.toast("다른 기분이나 상황을 말해주세요!")
 
+    return selected_seed
+
 
 def render_chat_message(
     role: str,
     content: str,
     recommendations: list[dict] | None = None,
     show_feedback: bool = False,
-) -> None:
+    msg_id: int | None = None,
+) -> dict | None:
     """Render a single chat message bubble.
 
     Used for both history replay and real-time response rendering so that
@@ -220,9 +258,18 @@ def render_chat_message(
         Optional list of recommendation dicts. Rendered as cards below
         the message text when present and non-empty.
     show_feedback:
-        If True, render the feedback UI below the recommendation cards.
+        If True, render the feedback UI and "이 곡으로 더 찾기" buttons.
         Should be True only for the active recommendation turn
         (controlled by app.py via active_feedback_id).
+    msg_id:
+        Passed through to render_recommendation_cards for button key uniqueness.
+
+    Returns
+    -------
+    dict | None
+        Passes through the return value of render_recommendation_cards —
+        the selected seed track if a "이 곡으로 더 찾기" button was clicked,
+        or None otherwise.
     """
     if role == "user":
         st.markdown(
@@ -232,10 +279,15 @@ def render_chat_message(
             f'{html.escape(content)}</div>',
             unsafe_allow_html=True,
         )
-        return
+        return None
 
     avatar = "assets/logo.png" if role == "assistant" else None
     with st.chat_message(role, avatar=avatar):
         st.markdown(content)
         if recommendations:
-            render_recommendation_cards(recommendations, show_feedback=show_feedback)
+            return render_recommendation_cards(
+                recommendations,
+                show_feedback=show_feedback,
+                msg_id=msg_id,
+            )
+    return None

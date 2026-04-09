@@ -191,6 +191,27 @@ BASE_CSS: str = """
     text-decoration: none !important;
 }
 
+/* ── Find Similar Button (이 곡으로 더 찾기) ─────────── */
+.find-similar-wrap .stButton > button {
+    font-family: 'Galmuri11', monospace !important;
+    font-size: 10px !important;
+    background-color: transparent !important;
+    color: #C44B78 !important;
+    border: 1px dashed #FF6B9D !important;
+    border-radius: 10px !important;
+    padding: 3px 10px !important;
+    min-height: unset !important;
+    height: auto !important;
+    line-height: 1.4 !important;
+    width: 100% !important;
+    margin-top: -8px !important;
+}
+.find-similar-wrap .stButton > button:hover {
+    background-color: #FFF0F5 !important;
+    border-style: solid !important;
+    color: #FF6B9D !important;
+}
+
 /* ── VHS Feature Bars (vertical) ────────────────────── */
 .vbar-row {
     display: flex;

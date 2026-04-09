@@ -49,7 +49,14 @@ _MOOD_LABELS: dict[str, str] = {
 
 
 def _is_routeable(text: str) -> bool:
-    """Return True if the input contains enough content to route."""
+    """Return True if the input contains enough content to route.
+
+    Returns False for:
+    - Inputs longer than 500 characters (prevents LLM timeout)
+    - Inputs with no Korean syllables or Latin letters (e.g. emoji-only, jamo-only)
+    """
+    if len(text.strip()) > 500:
+        return False
     return bool(_ROUTEABLE_RE.search(text))
 
 
@@ -152,11 +159,43 @@ if "_next_msg_id" not in st.session_state:
     st.session_state._next_msg_id = 1
 
 # ── Replay chat history ───────────────────────────────────────
+_selected_seed: dict | None = None
 for msg in st.session_state.messages:
-    render_chat_message(
+    result = render_chat_message(
         msg["role"], msg["content"], msg.get("recommendations"),
         show_feedback=(msg.get("id") == st.session_state.active_feedback_id),
+        msg_id=msg.get("id"),
     )
+    if result is not None:
+        _selected_seed = result
+
+# ── "이 곡으로 더 찾기" — auto_seed consumption ──────────────
+# Priority: if a find-similar button was clicked, handle it and rerun.
+# The chat_input block below is not reached in this execution.
+if _selected_seed is not None:
+    _track_name = _selected_seed["track_name"]
+    _track_artist = _selected_seed["track_artist"]
+    with st.spinner("비슷한 곡을 찾고 있어요..."):
+        _raw_recs = engine.recommend_similar(
+            seed_track=_track_name,
+            seed_artist=_track_artist,
+            top_k=8,
+        )
+    _recommendations = _filter_recommendations(_raw_recs)[:4]
+    if _recommendations:
+        _response_text = f"'{_track_name}'와(과) 비슷한 분위기의 곡들을 찾아봤어요."
+    else:
+        _response_text = _FALLBACK_REASK
+    _msg_id = st.session_state._next_msg_id
+    st.session_state._next_msg_id += 1
+    st.session_state.active_feedback_id = _msg_id if _recommendations else None
+    st.session_state.messages.append({
+        "id": _msg_id,
+        "role": "assistant",
+        "content": _response_text,
+        "recommendations": _recommendations or None,
+    })
+    st.rerun()
 
 # ── Chat input ────────────────────────────────────────────────
 if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
@@ -187,10 +226,16 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
                 and not seed_artist_val
                 and engine.is_ambiguous_title(seed_track_val)
             ):
+                artists = (
+                    engine.df[
+                        engine.df["track_name"].str.lower() == seed_track_val.lower()
+                    ]["track_artist"]
+                    .unique()[:3]
+                )
+                examples = ", ".join(f"'{seed_track_val} - {a}'" for a in artists)
                 response_text = (
                     f"'{seed_track_val}'이라는 제목의 곡이 여러 아티스트에게 있어요. "
-                    "어떤 아티스트의 곡인지 알려주시면 더 정확하게 찾아드릴게요! "
-                    "(예: 'Stay - Justin Bieber')"
+                    f"어떤 버전을 찾으시나요? (예: {examples})"
                 )
                 recommendations = []
             else:

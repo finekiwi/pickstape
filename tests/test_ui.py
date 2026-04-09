@@ -70,9 +70,10 @@ def _empty_dataset() -> tuple[pd.DataFrame, np.ndarray]:
 class PickstapeHarness:
     """Convenience wrapper around AppTest for Pickstape UI tests."""
 
-    def __init__(self, app: AppTest, mock_graph: MagicMock) -> None:
+    def __init__(self, app: AppTest, mock_graph: MagicMock, mock_engine: MagicMock | None = None) -> None:
         self.app = app
         self.mock_graph = mock_graph
+        self.mock_engine = mock_engine
 
     # ── interaction ──
 
@@ -140,13 +141,19 @@ def make_app():
         def _build(
             invoke_result: dict | None = None,
             ambiguous: bool = False,
+            similar_result: list[dict] | None = None,
         ) -> PickstapeHarness:
             import streamlit as st
 
             # Clear process-level cache so init_resources() re-runs with current mock.
             st.cache_resource.clear()
 
-            mock_re.return_value.is_ambiguous_title.return_value = ambiguous
+            mock_engine = mock_re.return_value
+            mock_engine.is_ambiguous_title.return_value = ambiguous
+            # Default similar result: one track, overrideable per test
+            mock_engine.recommend_similar.return_value = (
+                similar_result if similar_result is not None else [_sample_track()]
+            )
 
             mock_graph = MagicMock()
             mock_graph.invoke.return_value = invoke_result or _invoke_result()
@@ -154,7 +161,7 @@ def make_app():
 
             at = AppTest.from_file(_APP_PATH, default_timeout=15)
             at.run()
-            return PickstapeHarness(at, mock_graph)
+            return PickstapeHarness(at, mock_graph, mock_engine)
 
         yield _build
 
@@ -540,3 +547,145 @@ class TestDisambiguation:
         # Artist provided → disambiguation not triggered
         assert "아티스트" not in last["content"]
         assert last.get("recommendations") is not None
+
+
+# ── Tests: "이 곡으로 더 찾기" button ────────────────────────
+
+
+class TestFindSimilarButton:
+    """Tests for the find-similar button on recommendation cards.
+
+    The button appears only on the latest recommendation turn (show_feedback=True).
+    Clicking it bypasses the LLM router and calls engine.recommend_similar() directly.
+    """
+
+    def test_find_similar_triggers_engine_call(self, make_app):
+        """Clicking the find-similar button calls engine.recommend_similar with correct args."""
+        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
+        h = make_app(
+            _invoke_result(recommendations=[track]),
+            similar_result=[_sample_track(track_name="Similar Song")],
+        )
+        h.run(user_input="노래 추천해줘")
+
+        # After user message (id=1) and assistant response (id=2), click find-similar
+        h.app.button(key="find_similar_2_abc123").click()
+        h.app.run()
+
+        h.assert_no_exception()
+        h.mock_engine.recommend_similar.assert_called_once_with(
+            seed_track="Test Song",
+            seed_artist="Test Artist",
+            top_k=8,
+        )
+
+    def test_find_similar_appends_response_message(self, make_app):
+        """Clicking find-similar appends an assistant message with similar template text."""
+        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
+        h = make_app(
+            _invoke_result(recommendations=[track]),
+            similar_result=[_sample_track(track_name="Similar Song")],
+        )
+        h.run(user_input="노래 추천해줘")
+
+        h.app.button(key="find_similar_2_abc123").click()
+        h.app.run()
+
+        h.assert_no_exception()
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        last = assistant_msgs[-1]
+        assert "Test Song" in last["content"]
+        assert "비슷한 분위기" in last["content"]
+        assert last.get("recommendations") is not None
+
+    def test_find_similar_no_double_append_on_rerun(self, make_app):
+        """auto_seed is consumed via local variable — no double-append on subsequent reruns."""
+        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
+        h = make_app(
+            _invoke_result(recommendations=[track]),
+            similar_result=[_sample_track(track_name="Similar Song")],
+        )
+        h.run(user_input="노래 추천해줘")
+
+        h.app.button(key="find_similar_2_abc123").click()
+        h.app.run()
+
+        # Count messages before extra rerun
+        msg_count_after_click = len(h.messages)
+
+        # Simulate another rerun without clicking anything
+        h.app.run()
+        assert len(h.messages) == msg_count_after_click, (
+            "Message count should not change on rerun without button click"
+        )
+
+    def test_no_click_no_engine_call(self, make_app):
+        """Without clicking find-similar, engine.recommend_similar is not called."""
+        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
+        h = make_app(_invoke_result(recommendations=[track]))
+        h.run(user_input="노래 추천해줘")
+
+        # Just rerun without any button click
+        h.app.run()
+
+        h.assert_no_exception()
+        h.mock_engine.recommend_similar.assert_not_called()
+
+
+# ── Tests: edge case hardening ────────────────────────────────
+
+
+class TestEdgeCaseHardening:
+    """Tests for input validation and edge case fixes in PS-08."""
+
+    def test_input_longer_than_500_chars_triggers_fallback(self, make_app):
+        """Input > 500 chars is not routed — returns FALLBACK_REASK."""
+        h = make_app()
+        long_input = "가" * 501
+        h.run(user_input=long_input)
+
+        h.assert_no_exception()
+        h.mock_graph.invoke.assert_not_called()
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        assert "이해하지 못했어요" in assistant_msgs[-1]["content"]
+
+    def test_emoji_only_input_triggers_fallback(self, make_app):
+        """Emoji-only input (no Korean/Latin) is not routed — returns FALLBACK_REASK."""
+        h = make_app()
+        h.run(user_input="😭😭😭")
+
+        h.assert_no_exception()
+        h.mock_graph.invoke.assert_not_called()
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        assert "이해하지 못했어요" in assistant_msgs[-1]["content"]
+
+    def test_disambiguation_shows_artist_examples(self, make_app):
+        """Disambiguation message includes actual artist examples from engine.df."""
+        import pandas as pd
+
+        # Give the mocked engine a df with known tracks
+        h = make_app(
+            _invoke_result(
+                intent="similar",
+                params={"seed_track": "Stay", "seed_artist": None},
+                recommendations=[],
+            ),
+            ambiguous=True,
+        )
+        # Patch engine.df with sample data
+        h.mock_engine.df = pd.DataFrame([
+            {"track_name": "Stay", "track_artist": "Justin Bieber"},
+            {"track_name": "Stay", "track_artist": "Rihanna"},
+            {"track_name": "Stay", "track_artist": "The Kid LAROI"},
+        ])
+        h.run(user_input="Stay 비슷한 곡 찾아줘")
+
+        h.assert_no_exception()
+        assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
+        last_content = assistant_msgs[-1]["content"]
+        assert "Stay" in last_content
+        # Should include artist examples (at least one artist name)
+        assert any(
+            artist in last_content
+            for artist in ["Justin Bieber", "Rihanna", "The Kid LAROI"]
+        )
