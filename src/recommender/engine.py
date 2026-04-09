@@ -180,7 +180,7 @@ class RecommendationEngine:
         top_k:
             Number of results to return (seed itself excluded).
         """
-        if seed_track is None and seed_artist is None:
+        if not seed_track and not seed_artist:
             return []
 
         seed_idx = self._find_seed_index(seed_track, seed_artist)
@@ -289,7 +289,7 @@ class RecommendationEngine:
         Within each stage, the track with the highest track_popularity wins.
         Returns None if no match is found at any stage.
         """
-        if seed_track is None:
+        if not seed_track:
             return None
 
         track_lower = seed_track.lower()

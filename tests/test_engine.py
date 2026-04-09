@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.recommender.engine import RecommendationEngine, _RESULT_COLUMNS
+from src.recommender.engine import RecommendationEngine
 from src.recommender.preprocess import COSINE_FEATURES, load_and_preprocess
 
 
@@ -139,11 +139,16 @@ class TestRecommendByEmotion:
         assert "edm" in results[0]["playlist_genres"]
 
     def test_excited_bipolar_boost_applied(self, engine: RecommendationEngine) -> None:
-        """Bipolar (Mania) tracks should appear in excited results due to boosting."""
-        results = engine.recommend_by_emotion("excited", top_k=5)
+        """Bipolar (Mania) tracks (e1, e2) are in the excited range and should
+        rank in top results after the additive boost is applied."""
+        results = engine.recommend_by_emotion("excited", top_k=3)
         assert len(results) > 0
-        # At least one Mania track in results (e1/e2 are Mania and within range)
-        # We verify results are not empty and contain expected fields
+        # e1 and e2 are Bipolar (Mania), within excited range (valence 0.7-1.0,
+        # energy 0.7-1.0). At least one should appear in top-3 after boost.
+        top_names = {r["track_name"] for r in results}
+        assert top_names & {"Excited Song A", "Excited Song B"}, (
+            f"Expected at least one Mania-boosted track in top-3, got: {top_names}"
+        )
 
     def test_result_has_required_keys(self, engine: RecommendationEngine) -> None:
         results = engine.recommend_by_emotion("happy", top_k=1)
@@ -213,6 +218,14 @@ class TestRecommendBySituation:
 class TestRecommendSimilar:
     def test_both_none_returns_empty(self, engine: RecommendationEngine) -> None:
         assert engine.recommend_similar(None, None) == []
+
+    def test_empty_string_seed_returns_empty(self, engine: RecommendationEngine) -> None:
+        """Empty string seed_track should return [] not arbitrary results.
+
+        str.contains('') matches every row — empty input must be caught before
+        reaching the partial-match stage.
+        """
+        assert engine.recommend_similar(seed_track="", seed_artist=None) == []
 
     def test_exact_match_found(self, engine: RecommendationEngine) -> None:
         results = engine.recommend_similar(seed_track="Shape of You")
@@ -286,11 +299,10 @@ class TestRecommend:
 class TestFallbackCascade:
     def test_genre_drop_on_no_match(self, engine: RecommendationEngine) -> None:
         """When genre yields 0 results, fallback drops genre and returns results."""
-        # "latin" genre only has 1 happy song (h5), but top_k=5 → fallback drops genre
+        # sad + edm has 0 exact matches (s1=r&b, s2=rock) → fallback drops genre
+        # → should recover and return the sad-range tracks
         results = engine.recommend_by_emotion("sad", genre_pref="edm", top_k=5)
-        # sad + edm has 0 exact matches → fallback drops genre → returns sad songs
-        # (s1=r&b, s2=rock, no edm sad songs)
-        assert isinstance(results, list)  # should not raise
+        assert len(results) > 0, "Fallback should recover results after dropping genre"
 
     def test_range_widening_produces_results(self, engine: RecommendationEngine) -> None:
         """When strict ranges yield too few, widening should produce more results."""
