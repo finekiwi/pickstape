@@ -8,107 +8,204 @@ Three public functions:
 
 from __future__ import annotations
 
+import base64
 import html
+from pathlib import Path
 
 import streamlit as st
 
 
+_EXAMPLES = [
+    ("A1", "우울한 기분에 어울리는 노래 추천해줘"),
+    ("A2", "카페에서 들을 잔잔한 음악 추천해줘"),
+    ("A3", "운동할 때 들을 신나는 곡 골라줘"),
+    ("A4", "'Blinding Lights'랑 비슷한 곡 찾아줘"),
+]
+
+_LOGO_B64: str | None = None
+
+
+def _get_logo_b64() -> str | None:
+    """Load logo.png as base64, cached in module-level var."""
+    global _LOGO_B64
+    if _LOGO_B64 is None:
+        path = Path("assets/logo.png")
+        if path.exists():
+            _LOGO_B64 = base64.b64encode(path.read_bytes()).decode()
+    return _LOGO_B64
+
+
 def render_sidebar() -> None:
-    """Render the Pickstape sidebar with branding and usage examples."""
-    st.sidebar.title("Pickstape")
-    st.sidebar.caption("AI가 골라 담은 당신만의 테이프")
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(
-        "기분, 상황, 또는 좋아하는 곡을 말해주세요. "
-        "Pickstape가 딱 맞는 음악을 골라드려요."
+    """Render the Pickstape sidebar with cassette-label style."""
+    b64 = _get_logo_b64()
+    logo_img = (
+        f'<img src="data:image/png;base64,{b64}" '
+        f'style="width:36px;height:36px;object-fit:contain;vertical-align:middle;margin-right:8px">'
+        if b64 else ""
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**사용 예시**")
+    tracks_html = "".join(
+        f'<div class="sidebar-track{" sidebar-track-even" if i % 2 == 1 else ""}">'
+        f'  <span class="sidebar-track-num">{html.escape(num)}</span>'
+        f'  <span class="sidebar-track-title">{html.escape(title)}</span>'
+        f'</div>'
+        for i, (num, title) in enumerate(_EXAMPLES)
+    )
+
     st.sidebar.markdown(
-        "- 우울한 기분에 어울리는 노래 추천해줘\n"
-        "- 카페에서 들을 잔잔한 음악 추천해줘\n"
-        "- 운동할 때 들을 신나는 곡 골라줘\n"
-        "- 'Blinding Lights'랑 비슷한 곡 찾아줘"
+        f"""
+        <div class="sidebar-logo-block">
+          <div class="sidebar-logo-row">
+            {logo_img}<span class="sidebar-logo">PICKSTAPE</span>
+          </div>
+          <div class="sidebar-subtitle">AI가 골라 담은 당신만의 테이프</div>
+          <div class="sidebar-tape-meta">SIDE A · 90 min</div>
+        </div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-desc">기분, 상황, 또는 좋아하는 곡을 말해주세요.</div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-tracklist-block">
+          <div class="sidebar-section-label">TRACKLIST</div>
+          {tracks_html}
+        </div>
+        <div class="sidebar-rec">REC <span class="sidebar-rec-dot">●</span> PICKSTAPE 2026</div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
-def render_recommendation_cards(recommendations: list[dict]) -> None:
-    """Render a list of recommendation dicts as styled HTML cards.
+_FEATURE_COLORS = [
+    (0.8, "rgba(255,255,255,1.0)"),
+    (0.6, "rgba(255,255,255,0.8)"),
+    (0.4, "rgba(255,255,255,0.6)"),
+    (0.2, "rgba(255,255,255,0.45)"),
+    (0.0, "rgba(255,255,255,0.3)"),
+]
+
+_REEL_HTML = (
+    '<div class="reel-hole"><div class="reel-hole-inner"></div></div>'
+    '<div class="reel-hole"><div class="reel-hole-inner"></div></div>'
+)
+
+
+def _bar_color(value: float) -> str:
+    for threshold, color in _FEATURE_COLORS:
+        if value >= threshold:
+            return color
+    return "#F0D4DE"
+
+
+def _vbar(label: str, value: float) -> str:
+    height = int(round(value * 24))
+    color = _bar_color(value)
+    return (
+        f'<div class="vbar-col">'
+        f'  <div class="vbar-fill" style="height:{height}px;background:{color}"></div>'
+        f'  <div class="vbar-label">{label}</div>'
+        f'</div>'
+    )
+
+
+def _build_card_html(track: dict) -> str:
+    """Build VHS cassette card HTML string for one track dict."""
+    name = html.escape(track.get("track_name", "Unknown"))
+    artist = html.escape(track.get("track_artist", "Unknown"))
+    album = html.escape(track.get("track_album_name", "") or "")
+    genres: list[str] = [
+        html.escape(g) for g in (track.get("playlist_genres") or [])[:2]
+    ]
+    energy = track.get("energy", 0.0)
+    valence = track.get("valence", 0.0)
+    danceability = track.get("danceability", 0.0)
+    acousticness = track.get("acousticness", 0.0)
+    instrumentalness = track.get("instrumentalness", 0.0)
+    tempo_norm = min(track.get("tempo", 0.0) / 240.0, 1.0)
+
+    badges_html = "".join(f'<span class="genre-badge">{g}</span>' for g in genres)
+    bars_html = (
+        _vbar("E", energy)
+        + _vbar("D", danceability)
+        + _vbar("A", acousticness)
+        + _vbar("I", instrumentalness)
+        + _vbar("V", valence)
+        + _vbar("T", tempo_norm)
+    )
+    track_id = track.get("track_id", "")
+    spotify_btn = (
+        f'<a class="spotify-btn" href="https://open.spotify.com/track/{track_id}" '
+        f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
+        if track_id else ""
+    )
+    return (
+        f'<div class="vhs-card">'
+        f'  <div class="vhs-header">'
+        f'    <span class="vhs-label">SIDE A</span>'
+        f'    <div class="vhs-reels">{_REEL_HTML}</div>'
+        f'  </div>'
+        f'  <div class="vhs-tape-label">'
+        f'    <div class="card-title">{name}</div>'
+        f'    <div class="card-meta">{artist} &middot; {album}</div>'
+        f'    <div class="card-badges">{badges_html}</div>'
+        f'    {spotify_btn}'
+        f'  </div>'
+        f'  <div class="vbar-row">{bars_html}</div>'
+        f'</div>'
+    )
+
+
+def render_recommendation_card(track: dict) -> None:
+    """Render a single VHS cassette card for one track dict."""
+    st.markdown(_build_card_html(track), unsafe_allow_html=True)
+
+
+def render_recommendation_cards(
+    recommendations: list[dict],
+    show_feedback: bool = False,
+) -> None:
+    """Render recommendation dicts as VHS cassette cards in a 2-column grid.
 
     Parameters
     ----------
     recommendations:
         List of dicts from the recommendation engine. Expected keys:
         track_name, track_artist, track_album_name, playlist_genres (list),
-        energy, valence, danceability, tempo (raw BPM float).
+        energy, valence, danceability, acousticness, instrumentalness,
+        tempo (raw BPM float).
+    show_feedback:
+        If True, render the feedback UI below the cards. Only the latest
+        recommendation turn should pass True.
     """
-    for track in recommendations:
-        name = html.escape(track.get("track_name", "Unknown"))
-        artist = html.escape(track.get("track_artist", "Unknown"))
-        album = html.escape(track.get("track_album_name", "") or "")
-        # Limit to 2 genres — tracks can belong to many playlists and accumulate
-        # 4+ genre tags, which looks cluttered and prompts unnecessary questions.
-        genres: list[str] = [
-            html.escape(g) for g in (track.get("playlist_genres") or [])[:2]
-        ]
-        energy = track.get("energy", 0.0)
-        valence = track.get("valence", 0.0)
-        danceability = track.get("danceability", 0.0)
-        tempo = track.get("tempo", 0.0)
+    for i in range(0, len(recommendations), 2):
+        cols = st.columns(2)
+        for j, col in enumerate(cols):
+            idx = i + j
+            if idx < len(recommendations):
+                with col:
+                    render_recommendation_card(recommendations[idx])
 
-        # Genre badges
-        badges_html = "".join(
-            f'<span class="genre-badge">{g}</span>' for g in genres
-        )
+    if not show_feedback:
+        return
 
-        # Audio feature bars (energy, valence, danceability)
-        def _bar(label: str, value: float) -> str:
-            pct = int(round(value * 100))
-            return (
-                f'<div class="feature-row">'
-                f'  <span class="feature-label">{label}</span>'
-                f'  <div class="feature-track">'
-                f'    <div class="feature-fill" style="width:{pct}%"></div>'
-                f'  </div>'
-                f'  <span class="feature-value">{value:.2f}</span>'
-                f'</div>'
-            )
-
-        bars_html = (
-            _bar("Energy", energy)
-            + _bar("Valence", valence)
-            + _bar("Dance", danceability)
-        )
-
-        tempo_html = f'<div class="tempo-row">Tempo: {int(round(tempo))} BPM</div>'
-
-        track_id = track.get("track_id", "")
-        spotify_btn = (
-            f'<a class="spotify-btn" href="https://open.spotify.com/track/{track_id}" '
-            f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
-            if track_id else ""
-        )
-
-        card_html = (
-            f'<div class="recommendation-card">'
-            f'  <div class="card-title">{name}</div>'
-            f'  <div class="card-meta">{artist} &middot; {album}</div>'
-            f'  <div style="margin-bottom:0.5rem">{badges_html}</div>'
-            f'  {bars_html}'
-            f'  {tempo_html}'
-            f'  {spotify_btn}'
-            f'</div>'
-        )
-
-        st.markdown(card_html, unsafe_allow_html=True)
+    # Feedback UI — UI only, no logic
+    st.markdown(
+        '<div class="feedback-label">이 테이프가 마음에 드셨나요?</div>',
+        unsafe_allow_html=True,
+    )
+    key_seed = (recommendations[0].get("track_id") or "fb") if recommendations else "fb"
+    _, col_l, col_r, _ = st.columns([3, 1, 1, 3], gap="small")
+    with col_l:
+        if st.button("좋아요", key=f"fb_good_{key_seed}", use_container_width=True):
+            st.toast("감사해요! 더 좋은 테이프를 만들어볼게요 🎵")
+    with col_r:
+        if st.button("다른 분위기로", key=f"fb_bad_{key_seed}", use_container_width=True):
+            st.toast("다른 기분이나 상황을 말해주세요!")
 
 
 def render_chat_message(
     role: str,
     content: str,
     recommendations: list[dict] | None = None,
+    show_feedback: bool = False,
 ) -> None:
     """Render a single chat message bubble.
 
@@ -125,7 +222,18 @@ def render_chat_message(
         Optional list of recommendation dicts. Rendered as cards below
         the message text when present and non-empty.
     """
-    with st.chat_message(role):
+    if role == "user":
+        st.markdown(
+            f'<div style="background-color:#FFF0F5;padding:12px 16px;'
+            f'border-radius:20px 20px 4px 20px;margin:8px 0;color:#2D1B33;'
+            f'max-width:60%;margin-left:auto;">'
+            f'{html.escape(content)}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    avatar = "assets/logo.png" if role == "assistant" else None
+    with st.chat_message(role, avatar=avatar):
         st.markdown(content)
         if recommendations:
-            render_recommendation_cards(recommendations)
+            render_recommendation_cards(recommendations, show_feedback=show_feedback)
