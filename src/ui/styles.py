@@ -160,7 +160,7 @@ BASE_CSS: str = """
 .vhs-inner-panel {
     background-color: #FFFFFF;
     border-radius: 8px;
-    margin: 8px 10px 6px;
+    margin: 8px 10px 8px;
     padding: 10px 12px;
     overflow: hidden;
 }
