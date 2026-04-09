@@ -80,6 +80,18 @@ BASE_CSS: str = """
     color: #6B5B7B;
     margin-top: 0.2rem;
 }
+
+.spotify-btn {
+    display: inline-block;
+    margin-top: 0.6rem;
+    padding: 0.25rem 0.75rem;
+    background-color: #1DB954;
+    color: #FFFFFF !important;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none !important;
+}
 """
 
 

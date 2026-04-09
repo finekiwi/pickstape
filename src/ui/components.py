@@ -80,6 +80,13 @@ def render_recommendation_cards(recommendations: list[dict]) -> None:
 
         tempo_html = f'<div class="tempo-row">Tempo: {int(round(tempo))} BPM</div>'
 
+        track_id = track.get("track_id", "")
+        spotify_btn = (
+            f'<a class="spotify-btn" href="https://open.spotify.com/track/{track_id}" '
+            f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
+            if track_id else ""
+        )
+
         card_html = (
             f'<div class="recommendation-card">'
             f'  <div class="card-title">{name}</div>'
@@ -87,6 +94,7 @@ def render_recommendation_cards(recommendations: list[dict]) -> None:
             f'  <div style="margin-bottom:0.5rem">{badges_html}</div>'
             f'  {bars_html}'
             f'  {tempo_html}'
+            f'  {spotify_btn}'
             f'</div>'
         )
 
