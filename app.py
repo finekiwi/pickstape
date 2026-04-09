@@ -161,10 +161,11 @@ if "_next_msg_id" not in st.session_state:
 # ── Replay chat history ───────────────────────────────────────
 _selected_seed: dict | None = None
 for msg in st.session_state.messages:
+    _is_active = msg.get("id") == st.session_state.active_feedback_id
     result = render_chat_message(
         msg["role"], msg["content"], msg.get("recommendations"),
-        show_feedback=(msg.get("id") == st.session_state.active_feedback_id),
-        msg_id=msg.get("id"),
+        show_feedback=_is_active,
+        msg_id=msg.get("id") if _is_active else None,
     )
     if result is not None:
         _selected_seed = result

@@ -192,23 +192,27 @@ BASE_CSS: str = """
 }
 
 /* ── Find Similar Button (이 곡으로 더 찾기) ─────────── */
+.find-similar-wrap {
+    text-align: center;
+    margin-top: 2px;
+}
 .find-similar-wrap .stButton > button {
     font-family: 'Galmuri11', monospace !important;
-    font-size: 10px !important;
+    font-size: 9px !important;
     background-color: transparent !important;
-    color: #C44B78 !important;
-    border: 1px dashed #FF6B9D !important;
+    color: #DDA0B4 !important;
+    border: 1px dashed #DDA0B4 !important;
     border-radius: 10px !important;
-    padding: 3px 10px !important;
+    padding: 2px 10px !important;
     min-height: unset !important;
     height: auto !important;
     line-height: 1.4 !important;
-    width: 100% !important;
-    margin-top: -8px !important;
+    width: auto !important;
 }
 .find-similar-wrap .stButton > button:hover {
     background-color: #FFF0F5 !important;
-    border-style: solid !important;
+    border-color: #FF6B9D !important;
+    border-style: dashed !important;
     color: #FF6B9D !important;
 }
 
