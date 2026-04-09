@@ -205,7 +205,7 @@ def render_recommendation_cards(
                             unsafe_allow_html=True,
                         )
                         if selected_seed is None and st.button(
-                            "이 곡으로 더 찾기",
+                            "비슷한 곡 찾기",
                             key=btn_key,
                             use_container_width=True,
                         ):
