@@ -162,6 +162,7 @@ BASE_CSS: str = """
     border-radius: 8px;
     margin: 8px 10px 6px;
     padding: 12px 14px;
+    overflow: hidden;  /* prevent card-actions white bg bleeding into vbar area */
 }
 
 /* ── card-main: info (left) | actions (right) ─────────── */
