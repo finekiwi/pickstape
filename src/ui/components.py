@@ -166,37 +166,34 @@ def render_recommendation_card(
         unsafe_allow_html=True,
     )
 
-    # ── Tape label (white info area) ──────────────────────
-    st.markdown(
-        f'<div class="vhs-tape-label">'
-        f'  <div class="card-title">{name}</div>'
-        f'  <div class="card-meta">{artist} &middot; {album}</div>'
-        f'  <div class="card-badges">{badges_html}</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── Action buttons (white, between tape-label and vbar) ──
+    # ── Tape label: info (left) | actions (right) ─────────
+    # st.columns is used so that st.button() can live in the right column
+    # alongside the HTML Spotify link. CSS styles the whole area as white.
     find_similar_clicked = False
-    if show_find_similar and btn_key:
-        col_l, col_r = st.columns([1, 1])
-        with col_l:
-            if track_id:
-                st.markdown(
-                    f'<div class="card-action-cell">{_spotify_link_html(track_id)}</div>',
-                    unsafe_allow_html=True,
-                )
-        with col_r:
+    col_info, col_actions = st.columns([5, 3])
+
+    with col_info:
+        st.markdown(
+            f'<div class="card-info">'
+            f'  <div class="card-title">{name}</div>'
+            f'  <div class="card-meta">{artist} &middot; {album}</div>'
+            f'  <div class="card-badges">{badges_html}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    with col_actions:
+        if track_id:
+            st.markdown(
+                f'<div class="card-actions">{_spotify_link_html(track_id)}</div>',
+                unsafe_allow_html=True,
+            )
+        if show_find_similar and btn_key:
             find_similar_clicked = st.button(
                 "비슷한 곡 찾기",
                 key=btn_key,
                 use_container_width=True,
             )
-    elif track_id:
-        st.markdown(
-            f'<div class="card-action-cell">{_spotify_link_html(track_id)}</div>',
-            unsafe_allow_html=True,
-        )
 
     # ── Vbar (pink decorative bottom) ────────────────────
     st.markdown(

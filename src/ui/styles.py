@@ -171,21 +171,36 @@ BASE_CSS: str = """
     background: #FF6B9D;
 }
 
-.vhs-tape-label {
+/* ── Tape-label area (st.columns [5,3] — info | actions) ─ */
+/* The stHorizontalBlock containing .card-info IS the tape label */
+[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) {
     background-color: var(--bg-card);
-    padding: 10px 12px 6px;
+    padding: 10px 12px 10px;
+    align-items: center;
+    gap: 8px !important;
+}
+[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) > [data-testid="column"] {
+    background-color: var(--bg-card);
+    padding: 0 !important;
+}
+
+/* ── Card info (left column) ─────────────────────────── */
+.card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 .card-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--text-primary) !important;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     line-height: 1.3;
 }
 .card-meta {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary) !important;
-    margin-bottom: 6px;
+    margin-bottom: 5px;
 }
 .card-badges {
     margin-bottom: 0;
@@ -195,56 +210,50 @@ BASE_CSS: str = """
     background-color: #FF6B9D;
     color: #FFFFFF !important;
     border-radius: 10px;
-    padding: 2px 8px;
-    font-size: 10px;
+    padding: 2px 7px;
+    font-size: 9px;
     margin-right: 4px;
 }
 
-/* ── Card action cell (Spotify / 비슷한 곡 찾기 row) ─── */
-.card-action-cell {
-    background-color: var(--bg-card);
-    padding: 6px 12px 8px;
+/* ── Card actions (right column) ─────────────────────── */
+.card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: stretch;
 }
 
-/* Action row horizontal block (st.columns inside card) */
-[data-testid="column"]:has(.vhs-header) > [data-testid="stVerticalBlock"] > div:has([data-testid="stHorizontalBlock"]) {
-    background-color: var(--bg-card);
-}
-[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"] {
-    background-color: var(--bg-card);
-    padding: 4px 8px 8px;
-    gap: 4px !important;
-}
-
-/* ── Spotify button ──────────────────────────────────── */
+/* Spotify button: block, fills right column */
 .spotify-btn {
-    display: inline-block;
-    padding: 4px 12px;
+    display: block;
+    padding: 4px 8px;
     background-color: #FFF0F5;
     color: #FF6B9D !important;
     border: 1px solid #FF6B9D;
     border-radius: 10px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     text-decoration: none !important;
+    text-align: center;
     white-space: nowrap;
 }
 
 /* ── Find Similar Button (비슷한 곡 찾기) ────────────── */
-[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"] button[kind="secondary"] {
+/* Scoped to right column of the tape-label row */
+[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) [data-testid="column"]:last-child .stButton > button {
     font-family: 'Galmuri11', monospace !important;
     font-size: 9px !important;
     background-color: transparent !important;
     color: #DDA0B4 !important;
     border: 1px dashed #DDA0B4 !important;
     border-radius: 10px !important;
-    padding: 2px 8px !important;
+    padding: 3px 6px !important;
     min-height: unset !important;
     height: auto !important;
     line-height: 1.4 !important;
-    width: auto !important;
+    width: 100% !important;
 }
-[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"] button[kind="secondary"]:hover {
+[data-testid="column"]:has(.vhs-header) [data-testid="stHorizontalBlock"]:has(.card-info) [data-testid="column"]:last-child .stButton > button:hover {
     background-color: #FFF0F5 !important;
     border-color: #FF6B9D !important;
     border-style: dashed !important;
