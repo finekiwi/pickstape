@@ -94,7 +94,7 @@ def _bar_color(value: float) -> str:
 
 
 def _vbar(label: str, value: float) -> str:
-    height = int(round(value * 24))
+    height = int(round(value * 20))
     color = _bar_color(value)
     return (
         f'<div class="vbar-col">'

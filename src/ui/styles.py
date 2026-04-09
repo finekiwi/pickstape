@@ -272,11 +272,11 @@ BASE_CSS: str = """
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    height: 22px;
+    height: 40px;
     background-color: transparent;
-    border-radius: 0;
-    padding: 0 6px 3px;
-    margin: 6px 10px 8px;
+    border-radius: 0 0 10px 10px;
+    padding: 8px 6px 4px;
+    margin: 4px 10px 6px;
 }
 .vbar-col {
     display: flex;
