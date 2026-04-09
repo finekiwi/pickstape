@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import base64
 import html
+from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 
 import streamlit as st
 
@@ -22,17 +24,13 @@ _EXAMPLES = [
     ("A4", "'Blinding Lights'랑 비슷한 곡 찾아줘"),
 ]
 
-_LOGO_B64: str | None = None
-
-
+@lru_cache(maxsize=1)
 def _get_logo_b64() -> str | None:
-    """Load logo.png as base64, cached in module-level var."""
-    global _LOGO_B64
-    if _LOGO_B64 is None:
-        path = Path("assets/logo.png")
-        if path.exists():
-            _LOGO_B64 = base64.b64encode(path.read_bytes()).decode()
-    return _LOGO_B64
+    """Load logo.png as base64, cached via lru_cache."""
+    path = Path("assets/logo.png")
+    if path.exists():
+        return base64.b64encode(path.read_bytes()).decode()
+    return None
 
 
 def render_sidebar() -> None:
@@ -132,7 +130,7 @@ def _build_card_html(track: dict) -> str:
     )
     track_id = track.get("track_id", "")
     spotify_btn = (
-        f'<a class="spotify-btn" href="https://open.spotify.com/track/{track_id}" '
+        f'<a class="spotify-btn" href="https://open.spotify.com/track/{quote(track_id, safe="")}" '
         f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
         if track_id else ""
     )
@@ -221,6 +219,10 @@ def render_chat_message(
     recommendations:
         Optional list of recommendation dicts. Rendered as cards below
         the message text when present and non-empty.
+    show_feedback:
+        If True, render the feedback UI below the recommendation cards.
+        Should be True only for the active recommendation turn
+        (controlled by app.py via active_feedback_id).
     """
     if role == "user":
         st.markdown(

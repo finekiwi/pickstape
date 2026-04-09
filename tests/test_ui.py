@@ -217,14 +217,14 @@ class TestChatFlow:
         assert "골라봤어요" in assistant_msgs[-1]["content"]
 
     def test_recommendations_stored_in_assistant_message(self, make_app):
-        tracks = [_sample_track(track_name=f"Song {i}") for i in range(5)]
+        tracks = [_sample_track(track_name=f"Song {i}") for i in range(4)]
         h = make_app(_invoke_result(recommendations=tracks))
         h.run(user_input="신나는 곡 추천해줘")
 
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         recs = assistant_msgs[-1].get("recommendations")
         assert recs is not None
-        assert len(recs) == 5
+        assert len(recs) == 4
 
     def test_graph_invoke_called_with_user_input(self, make_app):
         h = make_app()
@@ -384,8 +384,8 @@ class TestPostProcessing:
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         assert "Yellow" in assistant_msgs[-1]["content"]
 
-    def test_recommendations_capped_at_five(self, make_app):
-        """Engine returning >5 tracks should be capped at 5 in stored recs."""
+    def test_recommendations_capped_at_four(self, make_app):
+        """Engine returning >4 tracks should be capped at 4 in stored recs."""
         tracks = [
             _sample_track(track_name=f"Song {i}", track_artist=f"Artist {i}")
             for i in range(8)
@@ -394,7 +394,7 @@ class TestPostProcessing:
         h.run(user_input="노래 추천해줘")
         assistant_msgs = [m for m in h.messages if m["role"] == "assistant"]
         recs = assistant_msgs[-1].get("recommendations") or []
-        assert len(recs) == 5
+        assert len(recs) == 4
 
 
 # ── Tests: fallback intent (graph returns empty recs) ─────────
