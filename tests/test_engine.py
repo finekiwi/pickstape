@@ -13,49 +13,12 @@ import pytest
 
 from src.recommender.engine import RecommendationEngine
 from src.recommender.preprocess import COSINE_FEATURES, load_and_preprocess
+from conftest import make_row
 
 
 # ---------------------------------------------------------------------------
 # Synthetic fixture
 # ---------------------------------------------------------------------------
-
-def _make_row(
-    track_id: str,
-    track_name: str,
-    track_artist: str,
-    track_popularity: int,
-    valence: float,
-    energy: float,
-    danceability: float,
-    acousticness: float,
-    speechiness: float,
-    instrumentalness: float,
-    liveness: float,
-    tempo: float,
-    loudness: float,
-    mental_health_label: str,
-    genres: list[str],
-) -> dict:
-    return {
-        "track_id": track_id,
-        "track_name": track_name,
-        "track_artist": track_artist,
-        "track_album_name": "Album",
-        "track_popularity": track_popularity,
-        "valence": valence,
-        "energy": energy,
-        "danceability": danceability,
-        "acousticness": acousticness,
-        "speechiness": speechiness,
-        "instrumentalness": instrumentalness,
-        "liveness": liveness,
-        "tempo": tempo,
-        "tempo_norm": tempo / 240.0,
-        "loudness": loudness,
-        "Mental_Health_Label": mental_health_label,
-        "playlist_genres": genres,
-        "playlist_subgenres": [],
-    }
 
 
 @pytest.fixture(scope="module")
@@ -63,43 +26,43 @@ def sample_data() -> tuple[pd.DataFrame, np.ndarray]:
     """Synthetic dataset covering all mood/situation filter cases."""
     rows = [
         # --- happy (valence 0.6-1.0, energy 0.5-1.0) ---
-        _make_row("h1", "Happy Song A", "Artist A", 80, 0.8, 0.7, 0.7, 0.1, 0.05, 0.0, 0.1, 120.0, -6.0, "Normal/Unclassified", ["pop"]),
-        _make_row("h2", "Happy Song B", "Artist B", 70, 0.75, 0.6, 0.65, 0.2, 0.06, 0.0, 0.2, 115.0, -7.0, "Normal/Unclassified", ["pop", "r&b"]),
-        _make_row("h3", "Happy Song C", "Artist C", 60, 0.9, 0.8, 0.8, 0.05, 0.04, 0.0, 0.15, 130.0, -5.0, "Normal/Unclassified", ["edm"]),
-        _make_row("h4", "Happy Song D", "Artist D", 50, 0.7, 0.55, 0.6, 0.3, 0.07, 0.0, 0.25, 100.0, -8.0, "Normal/Unclassified", ["pop"]),
-        _make_row("h5", "Happy Song E", "Artist E", 40, 0.65, 0.65, 0.7, 0.15, 0.05, 0.0, 0.1, 110.0, -9.0, "Normal/Unclassified", ["latin"]),
-        _make_row("h6", "Happy Song F", "Artist F", 30, 0.85, 0.75, 0.75, 0.1, 0.05, 0.0, 0.2, 125.0, -7.5, "Normal/Unclassified", ["pop"]),
+        make_row("h1", "Happy Song A", "Artist A", 80, 0.8, 0.7, 0.7, 0.1, 0.05, 0.0, 0.1, 120.0, -6.0, "Normal/Unclassified", ["pop"]),
+        make_row("h2", "Happy Song B", "Artist B", 70, 0.75, 0.6, 0.65, 0.2, 0.06, 0.0, 0.2, 115.0, -7.0, "Normal/Unclassified", ["pop", "r&b"]),
+        make_row("h3", "Happy Song C", "Artist C", 60, 0.9, 0.8, 0.8, 0.05, 0.04, 0.0, 0.15, 130.0, -5.0, "Normal/Unclassified", ["edm"]),
+        make_row("h4", "Happy Song D", "Artist D", 50, 0.7, 0.55, 0.6, 0.3, 0.07, 0.0, 0.25, 100.0, -8.0, "Normal/Unclassified", ["pop"]),
+        make_row("h5", "Happy Song E", "Artist E", 40, 0.65, 0.65, 0.7, 0.15, 0.05, 0.0, 0.1, 110.0, -9.0, "Normal/Unclassified", ["latin"]),
+        make_row("h6", "Happy Song F", "Artist F", 30, 0.85, 0.75, 0.75, 0.1, 0.05, 0.0, 0.2, 125.0, -7.5, "Normal/Unclassified", ["pop"]),
 
         # --- excited (valence 0.7-1.0, energy 0.7-1.0) — Bipolar (Mania) tracks ---
-        _make_row("e1", "Excited Song A", "Artist G", 90, 0.85, 0.85, 0.8, 0.05, 0.04, 0.0, 0.1, 140.0, -4.0, "Bipolar (Mania)", ["edm"]),
-        _make_row("e2", "Excited Song B", "Artist H", 85, 0.9, 0.9, 0.85, 0.03, 0.03, 0.0, 0.15, 145.0, -3.5, "Bipolar (Mania)", ["edm"]),
-        _make_row("e3", "Excited Song C", "Artist I", 75, 0.75, 0.75, 0.7, 0.1, 0.05, 0.0, 0.2, 135.0, -5.0, "Normal/Unclassified", ["pop"]),
+        make_row("e1", "Excited Song A", "Artist G", 90, 0.85, 0.85, 0.8, 0.05, 0.04, 0.0, 0.1, 140.0, -4.0, "Bipolar (Mania)", ["edm"]),
+        make_row("e2", "Excited Song B", "Artist H", 85, 0.9, 0.9, 0.85, 0.03, 0.03, 0.0, 0.15, 145.0, -3.5, "Bipolar (Mania)", ["edm"]),
+        make_row("e3", "Excited Song C", "Artist I", 75, 0.75, 0.75, 0.7, 0.1, 0.05, 0.0, 0.2, 135.0, -5.0, "Normal/Unclassified", ["pop"]),
 
         # --- sad (valence 0.0-0.3, energy 0.0-0.4) ---
-        _make_row("s1", "Sad Song A", "Artist J", 65, 0.2, 0.3, 0.4, 0.6, 0.05, 0.0, 0.1, 80.0, -12.0, "Normal/Unclassified", ["r&b"]),
-        _make_row("s2", "Sad Song B", "Artist K", 55, 0.1, 0.2, 0.35, 0.7, 0.04, 0.0, 0.05, 75.0, -14.0, "Normal/Unclassified", ["rock"]),
+        make_row("s1", "Sad Song A", "Artist J", 65, 0.2, 0.3, 0.4, 0.6, 0.05, 0.0, 0.1, 80.0, -12.0, "Normal/Unclassified", ["r&b"]),
+        make_row("s2", "Sad Song B", "Artist K", 55, 0.1, 0.2, 0.35, 0.7, 0.04, 0.0, 0.05, 75.0, -14.0, "Normal/Unclassified", ["rock"]),
 
         # --- 카페 situation (energy 0.1-0.4, acousticness 0.3-1.0, speechiness 0.0-0.1) ---
-        _make_row("c1", "Cafe Song A", "Artist L", 70, 0.5, 0.3, 0.5, 0.6, 0.05, 0.1, 0.1, 90.0, -10.0, "Normal/Unclassified", ["pop"]),
-        _make_row("c2", "Cafe Song B", "Artist M", 60, 0.55, 0.25, 0.45, 0.5, 0.04, 0.2, 0.08, 85.0, -11.0, "Normal/Unclassified", ["r&b"]),
-        _make_row("c3", "Cafe Song C", "Artist N", 50, 0.45, 0.35, 0.55, 0.4, 0.06, 0.15, 0.12, 92.0, -9.5, "Normal/Unclassified", ["pop"]),
+        make_row("c1", "Cafe Song A", "Artist L", 70, 0.5, 0.3, 0.5, 0.6, 0.05, 0.1, 0.1, 90.0, -10.0, "Normal/Unclassified", ["pop"]),
+        make_row("c2", "Cafe Song B", "Artist M", 60, 0.55, 0.25, 0.45, 0.5, 0.04, 0.2, 0.08, 85.0, -11.0, "Normal/Unclassified", ["r&b"]),
+        make_row("c3", "Cafe Song C", "Artist N", 50, 0.45, 0.35, 0.55, 0.4, 0.06, 0.15, 0.12, 92.0, -9.5, "Normal/Unclassified", ["pop"]),
 
         # --- 운동 situation (energy 0.7-1.0, tempo 120-240 BPM) ---
-        _make_row("w1", "Workout Song A", "Artist O", 80, 0.6, 0.85, 0.75, 0.05, 0.05, 0.0, 0.2, 150.0, -5.0, "Normal/Unclassified", ["edm"]),
-        _make_row("w2", "Workout Song B", "Artist P", 75, 0.65, 0.8, 0.8, 0.08, 0.04, 0.0, 0.15, 160.0, -4.5, "Normal/Unclassified", ["rap"]),
+        make_row("w1", "Workout Song A", "Artist O", 80, 0.6, 0.85, 0.75, 0.05, 0.05, 0.0, 0.2, 150.0, -5.0, "Normal/Unclassified", ["edm"]),
+        make_row("w2", "Workout Song B", "Artist P", 75, 0.65, 0.8, 0.8, 0.08, 0.04, 0.0, 0.15, 160.0, -4.5, "Normal/Unclassified", ["rap"]),
 
         # --- 수면 situation (energy 0.0-0.3, acousticness 0.4-1.0, loudness -46 to -10 dB) ---
-        _make_row("sl1", "Sleep Song A", "Artist Q", 40, 0.3, 0.15, 0.3, 0.8, 0.02, 0.5, 0.05, 60.0, -20.0, "Normal/Unclassified", ["pop"]),
-        _make_row("sl2", "Sleep Song B", "Artist R", 35, 0.25, 0.2, 0.25, 0.7, 0.03, 0.4, 0.04, 55.0, -18.0, "Normal/Unclassified", ["r&b"]),
+        make_row("sl1", "Sleep Song A", "Artist Q", 40, 0.3, 0.15, 0.3, 0.8, 0.02, 0.5, 0.05, 60.0, -20.0, "Normal/Unclassified", ["pop"]),
+        make_row("sl2", "Sleep Song B", "Artist R", 35, 0.25, 0.2, 0.25, 0.7, 0.03, 0.4, 0.04, 55.0, -18.0, "Normal/Unclassified", ["r&b"]),
 
         # --- 코딩 situation (energy 0.2-0.5, instrumentalness 0.3-1.0, speechiness 0.0-0.08) ---
-        _make_row("cd1", "Coding Song A", "Artist S", 60, 0.4, 0.35, 0.5, 0.3, 0.03, 0.6, 0.1, 100.0, -8.0, "Normal/Unclassified", ["pop"]),
-        _make_row("cd2", "Coding Song B", "Artist T", 55, 0.35, 0.4, 0.45, 0.35, 0.04, 0.7, 0.12, 95.0, -9.0, "Normal/Unclassified", ["edm"]),
+        make_row("cd1", "Coding Song A", "Artist S", 60, 0.4, 0.35, 0.5, 0.3, 0.03, 0.6, 0.1, 100.0, -8.0, "Normal/Unclassified", ["pop"]),
+        make_row("cd2", "Coding Song B", "Artist T", 55, 0.35, 0.4, 0.45, 0.35, 0.04, 0.7, 0.12, 95.0, -9.0, "Normal/Unclassified", ["edm"]),
 
         # --- seed track for similar-track test ---
-        _make_row("seed1", "Shape of You", "Ed Sheeran", 95, 0.93, 0.65, 0.825, 0.581, 0.0803, 0.0, 0.0789, 96.0, -3.183, "Normal/Unclassified", ["pop"]),
-        _make_row("seed2", "Shape of Something", "Ed Sheeran", 50, 0.8, 0.6, 0.7, 0.4, 0.05, 0.0, 0.1, 100.0, -6.0, "Normal/Unclassified", ["pop"]),
-        _make_row("seed3", "Another Shape", "Other Artist", 30, 0.7, 0.5, 0.6, 0.3, 0.06, 0.0, 0.15, 105.0, -7.0, "Normal/Unclassified", ["rock"]),
+        make_row("seed1", "Shape of You", "Ed Sheeran", 95, 0.93, 0.65, 0.825, 0.581, 0.0803, 0.0, 0.0789, 96.0, -3.183, "Normal/Unclassified", ["pop"]),
+        make_row("seed2", "Shape of Something", "Ed Sheeran", 50, 0.8, 0.6, 0.7, 0.4, 0.05, 0.0, 0.1, 100.0, -6.0, "Normal/Unclassified", ["pop"]),
+        make_row("seed3", "Another Shape", "Other Artist", 30, 0.7, 0.5, 0.6, 0.3, 0.06, 0.0, 0.15, 105.0, -7.0, "Normal/Unclassified", ["rock"]),
     ]
 
     df = pd.DataFrame(rows).reset_index(drop=True)
