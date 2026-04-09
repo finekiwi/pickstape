@@ -128,8 +128,25 @@ class TestParseIntentFallback:
     def test_similar_from_unquoted_pattern(self) -> None:
         intent, params = _parse_intent_fallback("Blinding Lights랑 비슷한 곡 찾아줘", "")
         assert intent == "similar"
-        assert params["seed_track"] is not None
-        assert "Blinding Lights" in params["seed_track"]
+        assert params["seed_track"] == "Blinding Lights"
+
+    def test_similar_particle_rang_stripped(self) -> None:
+        """'Shape of You 랑 비슷한 노래' — particle must not leak into seed_track."""
+        intent, params = _parse_intent_fallback("Shape of You 랑 비슷한 노래", "")
+        assert intent == "similar"
+        assert params["seed_track"] == "Shape of You"
+
+    def test_similar_particle_wa_stripped(self) -> None:
+        """'Blinding Lights와 비슷한 곡' — 와 particle stripped."""
+        intent, params = _parse_intent_fallback("Blinding Lights와 비슷한 곡", "")
+        assert intent == "similar"
+        assert params["seed_track"] == "Blinding Lights"
+
+    def test_similar_particle_gateun(self) -> None:
+        """'Hype Boy 같은 노래' — no particle, just keyword."""
+        intent, params = _parse_intent_fallback("Hype Boy 같은 노래", "")
+        assert intent == "similar"
+        assert params["seed_track"] == "Hype Boy"
 
     def test_genre_extraction(self) -> None:
         intent, params = _parse_intent_fallback("팝 장르로 신나는 노래 추천해줘", "")

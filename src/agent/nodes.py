@@ -170,11 +170,18 @@ def _parse_intent_fallback(
     if quoted:
         params["seed_track"] = quoted.group(1).strip()
     else:
-        # "X의 Y" / "X 비슷한" / "X 같은" — capture word(s) before keyword
-        pattern = r"(\S+(?:\s+\S+){0,4}?)(?:랑|와|과|이랑|의)?\s*(?:비슷|유사|같은)"
+        # "X랑/와/과/이랑 비슷한" — capture text before particle + keyword
+        pattern = r"(.+?)\s*(?:랑|와|과|이랑|의)\s*(?:비슷|유사|같은)"
         m = re.search(pattern, user_input)
+        if not m:
+            # "X 비슷한" — no particle
+            pattern = r"(\S+(?:\s+\S+){0,4}?)\s+(?:비슷|유사|같은)"
+            m = re.search(pattern, user_input)
         if m:
-            params["seed_track"] = m.group(1).strip()
+            seed = m.group(1).strip()
+            # Strip any trailing Korean particles that leaked through
+            seed = re.sub(r"\s*(?:랑|와|과|이랑|의)$", "", seed).strip()
+            params["seed_track"] = seed if seed else None
 
     # --- Determine intent ---
 
