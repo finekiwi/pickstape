@@ -17,6 +17,11 @@ from typing import Any
 # carry enough semantic content to route — they fall back to FALLBACK_REASK.
 _HAS_CONTENT_RE = re.compile(r"[가-힣a-zA-Z]")
 
+# CJK unified ideographs + extension A + compatibility — stripped from all
+# LLM outputs. Prompting alone is insufficient to prevent Qwen from leaking
+# Chinese characters; post-processing is the reliable backstop.
+_CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+")
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.agent.prompts import FALLBACK_REASK, RESPONSE_SYSTEM_PROMPT, ROUTER_SYSTEM_PROMPT
@@ -204,6 +209,17 @@ def _parse_intent_fallback(
 # ── Template fallback for response ───────────────────────────
 
 
+def _clean_response(text: str) -> str:
+    """Strip CJK ideograph runs and collapse leftover whitespace.
+
+    Qwen3.5-4B leaks Chinese characters even when prompted in Korean.
+    Post-processing is more reliable than prompt-only enforcement.
+    """
+    cleaned = _CJK_RE.sub("", text)
+    cleaned = re.sub(r"  +", " ", cleaned)
+    return cleaned.strip()
+
+
 def _template_response(recommendations: list[dict[str, Any]]) -> str:
     """Generate a minimal response when the LLM fails."""
     lines = []
@@ -340,11 +356,12 @@ def create_nodes(
                 "error": state.get("error", "No recommendations produced"),
             }
 
-        # Build concise context for LLM
+        # Build concise context for LLM.
+        # Intentionally omit intent label — the LLM was echoing "emotion이라는
+        # 의도" back into responses, leaking internal routing details.
         rec_text = _format_recommendations_for_llm(recommendations)
         human_content = (
             f"사용자 요청: {user_input}\n"
-            f"추천 의도: {intent}\n"
             f"추천 결과:\n{rec_text}"
         )
 
@@ -355,9 +372,9 @@ def create_nodes(
                 HumanMessage(content=human_content),
             ]
             response = llm.invoke(messages)
-            text = response.content or ""
-            if text.strip():
-                return {"response_text": text.strip()}
+            text = _clean_response(response.content or "")
+            if text:
+                return {"response_text": text}
         except Exception:
             logger.exception("Response LLM call failed")
 
