@@ -12,6 +12,8 @@ feature_matrix is used only for cosine similarity computation.
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
@@ -34,7 +36,8 @@ _TEMPO_DELTA: float = 50.0
 
 # Track names that must never appear in recommendations regardless of audio features.
 # Titles that carry distressing connotations or are inappropriate for the demo context.
-_TITLE_BLOCKLIST: frozenset[str] = frozenset({
+# Public so app.py can import instead of redefining.
+TITLE_BLOCKLIST: frozenset[str] = frozenset({
     "suicidal",
     "suicide",
     "kill yourself",
@@ -43,6 +46,24 @@ _TITLE_BLOCKLIST: frozenset[str] = frozenset({
     "i want to die",
     "self harm",
 })
+
+
+def is_blocked_title(name: str) -> bool:
+    """Return True if a track name contains a blocklisted term.
+
+    Single-word terms use word-boundary (\\b) matching to avoid false positives
+    (e.g. "die" in "DIEZ MINUTOS", "kys" in "Skyscraper").
+    Multi-word phrases use substring match since word boundaries span spaces.
+    """
+    name_lower = name.lower()
+    for term in TITLE_BLOCKLIST:
+        if " " in term:
+            if term in name_lower:
+                return True
+        else:
+            if re.search(r"\b" + re.escape(term) + r"\b", name_lower):
+                return True
+    return False
 
 # Columns included in each result dict
 _RESULT_COLUMNS: list[str] = [
@@ -382,14 +403,11 @@ class RecommendationEngine:
 
         Returns only the columns in _RESULT_COLUMNS. Mental_Health_Label is
         intentionally excluded (ADR-004: never expose diagnosis labels to UI).
-        Tracks whose names match _TITLE_BLOCKLIST are silently dropped.
+        Tracks matching is_blocked_title() are silently dropped.
         """
         available = [c for c in _RESULT_COLUMNS if c in self.df.columns]
         rows = self.df.iloc[indices][available].to_dict("records")
-        return [
-            r for r in rows
-            if r.get("track_name", "").lower() not in _TITLE_BLOCKLIST
-        ]
+        return [r for r in rows if not is_blocked_title(r.get("track_name", ""))]
 
     def _widen_ranges(
         self,

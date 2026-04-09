@@ -28,11 +28,7 @@ st.set_page_config(
 # carry no routeable intent — short-circuit to FALLBACK_REASK.
 _ROUTEABLE_RE = re.compile(r"[가-힣a-zA-Z]")
 
-# Track titles that must never appear in the UI regardless of audio features.
-_TITLE_BLOCKLIST: frozenset[str] = frozenset({
-    "suicidal", "suicide", "kill yourself", "kys",
-    "die", "i want to die", "self harm",
-})
+# is_blocked_title imported below after set_page_config (Streamlit constraint on imports).
 
 _FALLBACK_REASK: str = (
     "죄송해요, 요청을 정확히 이해하지 못했어요. 😅\n"
@@ -82,19 +78,20 @@ def _build_template_response(intent: str, params: dict) -> str:
 
 
 def _filter_recommendations(recs: list[dict]) -> list[dict]:
-    """Blocklist → dedup by (track_name, track_artist).
+    """Blocklist (word-boundary) → dedup by (track_name, track_artist).
 
+    Uses is_blocked_title() from engine so the check logic is never duplicated.
     Applied after graph.invoke() so it is immune to @st.cache_resource
     retaining stale engine instances across hot reloads.
     """
     seen: set[tuple[str, str]] = set()
     result: list[dict] = []
     for r in recs:
-        name = r.get("track_name", "").strip().lower()
+        name = r.get("track_name", "").strip()
         artist = r.get("track_artist", "").strip().lower()
-        if name in _TITLE_BLOCKLIST:
+        if is_blocked_title(name):
             continue
-        key = (name, artist)
+        key = (name.lower(), artist)
         if key in seen:
             continue
         seen.add(key)
@@ -105,6 +102,7 @@ def _filter_recommendations(recs: list[dict]) -> list[dict]:
 # ── Imports (after set_page_config) ─────────────────────────
 from src.agent import build_graph
 from src.recommender import RecommendationEngine, load_and_preprocess
+from src.recommender.engine import is_blocked_title
 from src.ui.components import render_chat_message, render_recommendation_cards, render_sidebar
 from src.ui.styles import inject_base_css
 

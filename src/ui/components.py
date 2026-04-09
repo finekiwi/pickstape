@@ -8,6 +8,8 @@ Three public functions:
 
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 
@@ -43,12 +45,14 @@ def render_recommendation_cards(recommendations: list[dict]) -> None:
         energy, valence, danceability, tempo (raw BPM float).
     """
     for track in recommendations:
-        name = track.get("track_name", "Unknown")
-        artist = track.get("track_artist", "Unknown")
-        album = track.get("track_album_name", "")
+        name = html.escape(track.get("track_name", "Unknown"))
+        artist = html.escape(track.get("track_artist", "Unknown"))
+        album = html.escape(track.get("track_album_name", "") or "")
         # Limit to 2 genres — tracks can belong to many playlists and accumulate
         # 4+ genre tags, which looks cluttered and prompts unnecessary questions.
-        genres: list[str] = (track.get("playlist_genres") or [])[:2]
+        genres: list[str] = [
+            html.escape(g) for g in (track.get("playlist_genres") or [])[:2]
+        ]
         energy = track.get("energy", 0.0)
         valence = track.get("valence", 0.0)
         danceability = track.get("danceability", 0.0)
