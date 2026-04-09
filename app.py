@@ -158,45 +158,43 @@ if "active_feedback_id" not in st.session_state:
 if "_next_msg_id" not in st.session_state:
     st.session_state._next_msg_id = 1
 
+# ── "비슷한 곡 찾기" — query param handler ────────────────────
+# Triggered when user clicks the HTML anchor in the card:
+#   <a href="?fs=1&fn=Track+Name&fa=Artist+Name">비슷한 곡 찾기</a>
+# Streamlit reruns with those params; we process here and clear immediately.
+if st.query_params.get("fs") == "1":
+    _fs_name = st.query_params.get("fn", "")
+    _fs_artist = st.query_params.get("fa", "")
+    st.query_params.clear()
+    if _fs_name:
+        with st.spinner("비슷한 곡을 찾고 있어요..."):
+            _raw_recs = engine.recommend_similar(
+                seed_track=_fs_name, seed_artist=_fs_artist, top_k=8,
+            )
+        _recommendations = _filter_recommendations(_raw_recs)[:4]
+        _response_text = (
+            f"'{_fs_name}'와(과) 비슷한 분위기의 곡들을 찾아봤어요."
+            if _recommendations else _FALLBACK_REASK
+        )
+        _msg_id = st.session_state._next_msg_id
+        st.session_state._next_msg_id += 1
+        st.session_state.active_feedback_id = _msg_id if _recommendations else None
+        st.session_state.messages.append({
+            "id": _msg_id,
+            "role": "assistant",
+            "content": _response_text,
+            "recommendations": _recommendations or None,
+        })
+        st.rerun()
+
 # ── Replay chat history ───────────────────────────────────────
-_selected_seed: dict | None = None
 for msg in st.session_state.messages:
     _is_active = msg.get("id") == st.session_state.active_feedback_id
-    result = render_chat_message(
+    render_chat_message(
         msg["role"], msg["content"], msg.get("recommendations"),
         show_feedback=_is_active,
         msg_id=msg.get("id") if _is_active else None,
     )
-    if result is not None:
-        _selected_seed = result
-
-# ── "이 곡으로 더 찾기" — auto_seed consumption ──────────────
-# Priority: if a find-similar button was clicked, handle it and rerun.
-# The chat_input block below is not reached in this execution.
-if _selected_seed is not None:
-    _track_name = _selected_seed["track_name"]
-    _track_artist = _selected_seed["track_artist"]
-    with st.spinner("비슷한 곡을 찾고 있어요..."):
-        _raw_recs = engine.recommend_similar(
-            seed_track=_track_name,
-            seed_artist=_track_artist,
-            top_k=8,
-        )
-    _recommendations = _filter_recommendations(_raw_recs)[:4]
-    if _recommendations:
-        _response_text = f"'{_track_name}'와(과) 비슷한 분위기의 곡들을 찾아봤어요."
-    else:
-        _response_text = _FALLBACK_REASK
-    _msg_id = st.session_state._next_msg_id
-    st.session_state._next_msg_id += 1
-    st.session_state.active_feedback_id = _msg_id if _recommendations else None
-    st.session_state.messages.append({
-        "id": _msg_id,
-        "role": "assistant",
-        "content": _response_text,
-        "recommendations": _recommendations or None,
-    })
-    st.rerun()
 
 # ── Chat input ────────────────────────────────────────────────
 if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):

@@ -112,7 +112,7 @@ BASE_CSS: str = """
     background-color: #FFC8DC;
     border-radius: 14px;
     padding: 0;
-    margin-bottom: 4px;
+    margin-bottom: 16px;
     transition: background-color 0.15s;
     border: 2px solid transparent;
 }
@@ -227,6 +227,26 @@ BASE_CSS: str = """
 }
 .spotify-btn:hover {
     background-color: #FFD4E5;
+}
+
+/* find-similar: secondary style, same column as spotify-btn */
+.find-similar-btn {
+    display: block;
+    padding: 5px 8px;
+    background-color: transparent;
+    color: #C44B78 !important;
+    border: 1px dashed #DDA0B4;
+    border-radius: 10px;
+    font-size: 9px;
+    font-family: 'Galmuri11', monospace;
+    text-decoration: none !important;
+    text-align: center;
+    white-space: nowrap;
+}
+.find-similar-btn:hover {
+    background-color: #FFF0F5;
+    border-color: #FF6B9D;
+    color: #FF6B9D !important;
 }
 
 /* find-similar placeholder: invisible, reserves height for the real button */

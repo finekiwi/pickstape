@@ -549,27 +549,23 @@ class TestDisambiguation:
         assert last.get("recommendations") is not None
 
 
-# ── Tests: "이 곡으로 더 찾기" button ────────────────────────
+# ── Tests: "비슷한 곡 찾기" (query param approach) ───────────
 
 
 class TestFindSimilarButton:
-    """Tests for the find-similar button on recommendation cards.
+    """Tests for the find-similar feature via URL query params.
 
-    The button appears only on the latest recommendation turn (show_feedback=True).
-    Clicking it bypasses the LLM router and calls engine.recommend_similar() directly.
+    '비슷한 곡 찾기' is now an HTML <a> link that sets ?fs=1&fn=...&fa=...
+    Streamlit reruns with those params; app.py detects and calls
+    engine.recommend_similar() then clears the params.
     """
 
     def test_find_similar_triggers_engine_call(self, make_app):
-        """Clicking the find-similar button calls engine.recommend_similar with correct args."""
-        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
-        h = make_app(
-            _invoke_result(recommendations=[track]),
-            similar_result=[_sample_track(track_name="Similar Song")],
-        )
-        h.run(user_input="노래 추천해줘")
-
-        # After user message (id=1) and assistant response (id=2), click find-similar
-        h.app.button(key="find_similar_2_abc123").click()
+        """Query params fs=1 → engine.recommend_similar called with correct args."""
+        h = make_app(similar_result=[_sample_track(track_name="Similar Song")])
+        h.app.query_params["fs"] = "1"
+        h.app.query_params["fn"] = "Test Song"
+        h.app.query_params["fa"] = "Test Artist"
         h.app.run()
 
         h.assert_no_exception()
@@ -580,15 +576,11 @@ class TestFindSimilarButton:
         )
 
     def test_find_similar_appends_response_message(self, make_app):
-        """Clicking find-similar appends an assistant message with similar template text."""
-        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
-        h = make_app(
-            _invoke_result(recommendations=[track]),
-            similar_result=[_sample_track(track_name="Similar Song")],
-        )
-        h.run(user_input="노래 추천해줘")
-
-        h.app.button(key="find_similar_2_abc123").click()
+        """Query params → assistant message appended with similar template text."""
+        h = make_app(similar_result=[_sample_track(track_name="Similar Song")])
+        h.app.query_params["fs"] = "1"
+        h.app.query_params["fn"] = "Test Song"
+        h.app.query_params["fa"] = "Test Artist"
         h.app.run()
 
         h.assert_no_exception()
@@ -598,34 +590,23 @@ class TestFindSimilarButton:
         assert "비슷한 분위기" in last["content"]
         assert last.get("recommendations") is not None
 
-    def test_find_similar_no_double_append_on_rerun(self, make_app):
-        """auto_seed is consumed via local variable — no double-append on subsequent reruns."""
-        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
-        h = make_app(
-            _invoke_result(recommendations=[track]),
-            similar_result=[_sample_track(track_name="Similar Song")],
-        )
-        h.run(user_input="노래 추천해줘")
-
-        h.app.button(key="find_similar_2_abc123").click()
+    def test_no_double_append_on_rerun(self, make_app):
+        """Query params cleared immediately — no double-append on next rerun."""
+        h = make_app(similar_result=[_sample_track(track_name="Similar Song")])
+        h.app.query_params["fs"] = "1"
+        h.app.query_params["fn"] = "Test Song"
+        h.app.query_params["fa"] = "Test Artist"
         h.app.run()
 
-        # Count messages before extra rerun
-        msg_count_after_click = len(h.messages)
-
-        # Simulate another rerun without clicking anything
-        h.app.run()
-        assert len(h.messages) == msg_count_after_click, (
-            "Message count should not change on rerun without button click"
+        msg_count = len(h.messages)
+        h.app.run()  # rerun without params
+        assert len(h.messages) == msg_count, (
+            "Message count must not change when no query params are set"
         )
 
-    def test_no_click_no_engine_call(self, make_app):
-        """Without clicking find-similar, engine.recommend_similar is not called."""
-        track = _sample_track(track_id="abc123", track_name="Test Song", track_artist="Test Artist")
-        h = make_app(_invoke_result(recommendations=[track]))
-        h.run(user_input="노래 추천해줘")
-
-        # Just rerun without any button click
+    def test_no_params_no_engine_call(self, make_app):
+        """Without query params, engine.recommend_similar is not called."""
+        h = make_app()
         h.app.run()
 
         h.assert_no_exception()

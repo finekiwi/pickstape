@@ -12,7 +12,7 @@ import base64
 import html
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import streamlit as st
 
@@ -140,12 +140,15 @@ def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
         f'target="_blank" rel="noopener noreferrer">▶ Spotify에서 열기</a>'
         if track_id else ""
     )
-    # Placeholder reserves the same height as the real st.button so the
-    # card's inner-panel height stays consistent whether the button is shown or not.
-    find_similar_placeholder = (
-        '<div class="find-similar-placeholder">비슷한 곡 찾기</div>'
-        if show_find_similar else ""
-    )
+    # find-similar: same mechanism as Spotify — pure HTML anchor.
+    # Click sets URL query params (?fs=1&fn=...&fa=...) → Streamlit rerun
+    # → app.py detects via st.query_params and calls engine.recommend_similar().
+    find_similar_html = ""
+    if show_find_similar:
+        href = "?" + urlencode({"fs": "1", "fn": track.get("track_name", ""), "fa": track.get("track_artist", "")})
+        find_similar_html = (
+            f'<a class="find-similar-btn" href="{html.escape(href)}">비슷한 곡 찾기</a>'
+        )
     return (
         f'<div class="vhs-card">'
         f'  <div class="vhs-header">'
@@ -161,7 +164,7 @@ def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
         f'      </div>'
         f'      <div class="card-actions">'
         f'        {spotify_html}'
-        f'        {find_similar_placeholder}'
+        f'        {find_similar_html}'
         f'      </div>'
         f'    </div>'
         f'  </div>'
@@ -174,53 +177,34 @@ def render_recommendation_card(
     track: dict,
     show_find_similar: bool = False,
     btn_key: str | None = None,
-) -> bool:
-    """Render a single VHS cassette card.
+) -> None:
+    """Render a single VHS cassette card as a self-contained HTML block.
 
-    The card HTML (including the white inner panel) is rendered as a single
-    st.markdown() block. When show_find_similar=True, the HTML contains a
-    visual placeholder in .card-actions and the real clickable button is
-    rendered immediately after with CSS aligning it over the placeholder.
-
-    Returns True if '비슷한 곡 찾기' was clicked.
+    Both Spotify and '비슷한 곡 찾기' are HTML anchors — no st.button needed.
+    '비슷한 곡 찾기' sets URL query params on click; app.py detects them via
+    st.query_params and calls engine.recommend_similar().
+    btn_key is accepted but unused (kept for backward API compatibility).
     """
     st.markdown(_build_card_html(track, show_find_similar), unsafe_allow_html=True)
-    if show_find_similar and btn_key:
-        return st.button("비슷한 곡 찾기", key=btn_key)
-    return False
 
 
 def render_recommendation_cards(
     recommendations: list[dict],
     show_feedback: bool = False,
     msg_id: int | None = None,
-) -> dict | None:
+) -> None:
     """Render recommendation dicts as VHS cassette cards in a 2-column grid.
 
     Parameters
     ----------
     recommendations:
-        List of dicts from the recommendation engine. Expected keys:
-        track_name, track_artist, track_album_name, playlist_genres (list),
-        energy, valence, danceability, acousticness, instrumentalness,
-        tempo (raw BPM float).
+        List of dicts from the recommendation engine.
     show_feedback:
-        If True, render the feedback UI and "이 곡으로 더 찾기" buttons below
-        the cards. Only the latest recommendation turn should pass True.
+        If True, render the feedback UI. Only the latest turn passes True.
     msg_id:
-        Message ID used to generate unique button keys. Required for
-        "이 곡으로 더 찾기" buttons; buttons are hidden when None.
-
-    Returns
-    -------
-    dict | None
-        If a "이 곡으로 더 찾기" button was clicked, returns
-        {"track_name": str, "track_artist": str, "track_id": str}.
-        Returns None if no button was clicked.
-        Only the first click is captured (defensive against multiple True
-        returns, though Streamlit only returns True for one button per rerun).
+        Controls whether '비슷한 곡 찾기' link appears on cards.
+        Only the active turn (show_feedback=True, msg_id set) shows the link.
     """
-    selected_seed: dict | None = None
     show_find_similar = show_feedback and msg_id is not None
 
     for i in range(0, len(recommendations), 2):
@@ -228,24 +212,14 @@ def render_recommendation_cards(
         for j, col in enumerate(cols):
             idx = i + j
             if idx < len(recommendations):
-                track = recommendations[idx]
-                track_id = track.get("track_id", str(idx))
-                btn_key = f"find_similar_{msg_id}_{track_id}" if show_find_similar else None
                 with col:
-                    clicked = render_recommendation_card(
-                        track,
+                    render_recommendation_card(
+                        recommendations[idx],
                         show_find_similar=show_find_similar,
-                        btn_key=btn_key,
                     )
-                    if clicked and selected_seed is None:
-                        selected_seed = {
-                            "track_name": track.get("track_name", ""),
-                            "track_artist": track.get("track_artist", ""),
-                            "track_id": track_id,
-                        }
 
     if not show_feedback:
-        return selected_seed
+        return
 
     # Feedback UI — UI only, no logic
     st.markdown(
@@ -261,8 +235,6 @@ def render_recommendation_cards(
         if st.button("다른 분위기로", key=f"fb_bad_{key_seed}", use_container_width=True):
             st.toast("다른 기분이나 상황을 말해주세요!")
 
-    return selected_seed
-
 
 def render_chat_message(
     role: str,
@@ -270,35 +242,8 @@ def render_chat_message(
     recommendations: list[dict] | None = None,
     show_feedback: bool = False,
     msg_id: int | None = None,
-) -> dict | None:
-    """Render a single chat message bubble.
-
-    Used for both history replay and real-time response rendering so that
-    the output is identical in both cases.
-
-    Parameters
-    ----------
-    role:
-        "user" or "assistant".
-    content:
-        The message text.
-    recommendations:
-        Optional list of recommendation dicts. Rendered as cards below
-        the message text when present and non-empty.
-    show_feedback:
-        If True, render the feedback UI and "이 곡으로 더 찾기" buttons.
-        Should be True only for the active recommendation turn
-        (controlled by app.py via active_feedback_id).
-    msg_id:
-        Passed through to render_recommendation_cards for button key uniqueness.
-
-    Returns
-    -------
-    dict | None
-        Passes through the return value of render_recommendation_cards —
-        the selected seed track if a "이 곡으로 더 찾기" button was clicked,
-        or None otherwise.
-    """
+) -> None:
+    """Render a single chat message bubble."""
     if role == "user":
         st.markdown(
             f'<div style="background-color:#FFF0F5;padding:12px 16px;'
@@ -307,15 +252,14 @@ def render_chat_message(
             f'{html.escape(content)}</div>',
             unsafe_allow_html=True,
         )
-        return None
+        return
 
     avatar = "assets/logo.png" if role == "assistant" else None
     with st.chat_message(role, avatar=avatar):
         st.markdown(content)
         if recommendations:
-            return render_recommendation_cards(
+            render_recommendation_cards(
                 recommendations,
                 show_feedback=show_feedback,
                 msg_id=msg_id,
             )
-    return None
