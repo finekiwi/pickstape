@@ -14,7 +14,7 @@ import streamlit as st
 # ── Page config (must be the first Streamlit call) ───────────
 st.set_page_config(
     page_title="Pickstape",
-    page_icon="🎵",
+    page_icon="assets/logo.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -144,20 +144,28 @@ _WELCOME: str = (
 
 if "messages" not in st.session_state:
     st.session_state.messages: list[dict] = [
-        {"role": "assistant", "content": _WELCOME, "recommendations": None}
+        {"id": 0, "role": "assistant", "content": _WELCOME, "recommendations": None}
     ]
+if "active_feedback_id" not in st.session_state:
+    st.session_state.active_feedback_id = None
+if "_next_msg_id" not in st.session_state:
+    st.session_state._next_msg_id = 1
 
 # ── Replay chat history ───────────────────────────────────────
 for msg in st.session_state.messages:
-    render_chat_message(msg["role"], msg["content"], msg.get("recommendations"))
+    render_chat_message(
+        msg["role"], msg["content"], msg.get("recommendations"),
+        show_feedback=(msg.get("id") == st.session_state.active_feedback_id),
+    )
 
 # ── Chat input ────────────────────────────────────────────────
 if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
     # Display and store user message
     render_chat_message("user", user_input)
     st.session_state.messages.append(
-        {"role": "user", "content": user_input, "recommendations": None}
+        {"id": st.session_state._next_msg_id, "role": "user", "content": user_input, "recommendations": None}
     )
+    st.session_state._next_msg_id += 1
 
     # Invoke agent (skip graph for non-routeable input)
     if not _is_routeable(user_input):
@@ -165,7 +173,7 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
         recommendations = []
     else:
         try:
-            with st.spinner("테이프를 고르는 중..."):
+            with st.spinner("테이프를 고르고 있어요..."):
                 result = graph.invoke({"user_input": user_input})
             intent = result.get("intent", "fallback")
             params = result.get("params") or {}
@@ -187,19 +195,24 @@ if user_input := st.chat_input("어떤 음악을 찾고 계세요?"):
                 recommendations = []
             else:
                 response_text = _build_template_response(intent, params)
-                recommendations = _filter_recommendations(result.get("recommendations", []))[:5]
+                recommendations = _filter_recommendations(result.get("recommendations", []))[:4]
                 if not recommendations:
                     response_text = _FALLBACK_REASK
         except Exception:
             response_text = "서버 연결에 실패했어요. 잠시 후 다시 시도해주세요."
             recommendations = []
 
-    # Display and store assistant message (always, even on error)
-    render_chat_message("assistant", response_text, recommendations or None)
+    # Store assistant message, then rerun so replay handles all rendering
+    # (including feedback — avoids double-render path)
+    msg_id = st.session_state._next_msg_id
+    st.session_state._next_msg_id += 1
+    st.session_state.active_feedback_id = msg_id if bool(recommendations) else None
     st.session_state.messages.append(
         {
+            "id": msg_id,
             "role": "assistant",
             "content": response_text,
             "recommendations": recommendations or None,
         }
     )
+    st.rerun()
