@@ -146,7 +146,6 @@ def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
         find_similar_html = (
             f'<a class="find-similar-btn" href="{html.escape(href)}">비슷한 곡 찾기</a>'
         )
-    find_similar_html = find_similar_html  # already set above
     return (
         f'<div class="vhs-card">'
         f'  <div class="vhs-header">'
@@ -171,17 +170,12 @@ def _build_card_html(track: dict, show_find_similar: bool = False) -> str:
     )
 
 
-def render_recommendation_card(
-    track: dict,
-    show_find_similar: bool = False,
-    btn_key: str | None = None,
-) -> None:
+def render_recommendation_card(track: dict, show_find_similar: bool = False) -> None:
     """Render a single VHS cassette card as a self-contained HTML block.
 
     Both Spotify and '비슷한 곡 찾기' are HTML anchors — no st.button needed.
     '비슷한 곡 찾기' sets URL query params on click; app.py detects them via
     st.query_params and calls engine.recommend_similar().
-    btn_key is accepted but unused (kept for backward API compatibility).
     """
     st.markdown(_build_card_html(track, show_find_similar), unsafe_allow_html=True)
 

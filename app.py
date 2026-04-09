@@ -167,15 +167,19 @@ if st.query_params.get("fs") == "1":
     _fs_artist = st.query_params.get("fa", "")
     st.query_params.clear()
     if _fs_name:
-        with st.spinner("비슷한 곡을 찾고 있어요..."):
-            _raw_recs = engine.recommend_similar(
-                seed_track=_fs_name, seed_artist=_fs_artist, top_k=8,
+        try:
+            with st.spinner("비슷한 곡을 찾고 있어요..."):
+                _raw_recs = engine.recommend_similar(
+                    seed_track=_fs_name, seed_artist=_fs_artist, top_k=8,
+                )
+            _recommendations = _filter_recommendations(_raw_recs)[:4]
+            _response_text = (
+                f"'{_fs_name}'와(과) 비슷한 분위기의 곡들을 찾아봤어요."
+                if _recommendations else _FALLBACK_REASK
             )
-        _recommendations = _filter_recommendations(_raw_recs)[:4]
-        _response_text = (
-            f"'{_fs_name}'와(과) 비슷한 분위기의 곡들을 찾아봤어요."
-            if _recommendations else _FALLBACK_REASK
-        )
+        except Exception:
+            _recommendations = []
+            _response_text = "서버 연결에 실패했어요. 잠시 후 다시 시도해주세요."
         _msg_id = st.session_state._next_msg_id
         st.session_state._next_msg_id += 1
         st.session_state.active_feedback_id = _msg_id if _recommendations else None
